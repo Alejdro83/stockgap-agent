@@ -5,4 +5,11 @@ __pycache__/
 .pytest_cache/
 .venv/
 .env
+.env.*
+**/.env
 *.log
+*.db
+*.jsonl
+*.pid
+.claude/
+fixtures/

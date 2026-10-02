@@ -1,0 +1,560 @@
+{
+  "probed_at": "2026-10-02T00:20:58Z",
+  "endpoint": "GET /build/api/v1/dex/aggregator/quote",
+  "request_shape": {
+    "binanceChainId": "56",
+    "fromTokenAddress": "<USDT_BSC>",
+    "toTokenAddress": "<token>",
+    "amount": "<1000 USDT base units>",
+    "userWalletAddress": "<probe wallet>"
+  },
+  "fee_slippage_fields_union": [
+    "estimateGasFee",
+    "feeAmount",
+    "feeToken",
+    "priceImpactPercent",
+    "tradeFee"
+  ],
+  "results": [
+    {
+      "underlying_ticker": "NVDA",
+      "token_symbol": "NVDAB",
+      "platform_id": "bstock",
+      "token_contract": "0x02fca66c1d1afb4e2a7884261eb00f63598a7436",
+      "market_cap": 5573369070000.0,
+      "http_status": 200,
+      "code": 0,
+      "msg": "success",
+      "fee_slippage_fields": [
+        "estimateGasFee",
+        "feeAmount",
+        "feeToken",
+        "priceImpactPercent",
+        "tradeFee"
+      ],
+      "envelope": {
+        "code": 0,
+        "msg": "success",
+        "data": [
+          {
+            "quoteId": "83012a6a51104e3ea3d62e6aef339aed",
+            "vendorName": "LiquidMesh",
+            "executionMode": "SWAP",
+            "binanceChainId": "56",
+            "fromTokenAmount": "1000000000000000000000",
+            "toTokenAmount": "4304395877236630279",
+            "tradeFee": "0.01815496",
+            "estimateGasFee": "450000",
+            "priceImpactPercent": "0.0025091780",
+            "router": "0x55d398326f99059ff775485246999027b3197955--0x02fca66c1d1afb4e2a7884261eb00f63598a7436",
+            "fromToken": {
+              "tokenContractAddress": "0x55d398326f99059fF775485246999027B3197955",
+              "tokenSymbol": "USDT",
+              "tokenUnitPrice": "0.9996991627152418",
+              "decimal": "18",
+              "isHoneyPot": false,
+              "taxRate": "0"
+            },
+            "toToken": {
+              "tokenContractAddress": "0x02fca66c1d1afb4e2a7884261eb00f63598a7436",
+              "tokenSymbol": "NVDAB",
+              "tokenUnitPrice": "232.37069577316445817435000000",
+              "decimal": "18",
+              "isHoneyPot": false,
+              "taxRate": "0"
+            },
+            "dexRouterList": [
+              {
+                "dexProtocol": {
+                  "dexName": "Pancakeswap V3",
+                  "percent": "100.00"
+                },
+                "fromToken": {
+                  "tokenContractAddress": "0x55d398326f99059ff775485246999027b3197955",
+                  "tokenSymbol": "USDT",
+                  "tokenUnitPrice": "0.9996991627152418",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "fromTokenIndex": "0",
+                "toToken": {
+                  "tokenContractAddress": "0x02fca66c1d1afb4e2a7884261eb00f63598a7436",
+                  "tokenSymbol": "NVDAB",
+                  "tokenUnitPrice": "232.37069577316445817435000000",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "toTokenIndex": "1"
+              }
+            ],
+            "approveTarget": "0xB44446b0c8E56988c34f7Ff73Ae904982b5FdDA5",
+            "isBest": true,
+            "feeAmount": null,
+            "feeToken": null,
+            "actualSwapAmount": null
+          }
+        ],
+        "timestamp": 1790900455981,
+        "success": true
+      }
+    },
+    {
+      "underlying_ticker": "AAPL",
+      "token_symbol": "AAPLon",
+      "platform_id": "ondo",
+      "token_contract": "0x390a684ef9cade28a7ad0dfa61ab1eb3842618c4",
+      "market_cap": 4819752273498.0,
+      "http_status": 200,
+      "code": 0,
+      "msg": "success",
+      "fee_slippage_fields": [
+        "estimateGasFee",
+        "feeAmount",
+        "feeToken",
+        "priceImpactPercent",
+        "tradeFee"
+      ],
+      "envelope": {
+        "code": 0,
+        "msg": "success",
+        "data": [
+          {
+            "quoteId": "cb49bbd4d42d40a3b1e3cc7698572660",
+            "vendorName": "LiquidMesh",
+            "executionMode": "SWAP",
+            "binanceChainId": "56",
+            "fromTokenAmount": "1000000000000000000000",
+            "toTokenAmount": "3004338067506006293",
+            "tradeFee": "0.01818896",
+            "estimateGasFee": "450000",
+            "priceImpactPercent": "-0.0000000000",
+            "router": "0x55d398326f99059ff775485246999027b3197955--0x390a684ef9cade28a7ad0dfa61ab1eb3842618c4",
+            "fromToken": {
+              "tokenContractAddress": "0x55d398326f99059fF775485246999027B3197955",
+              "tokenSymbol": "USDT",
+              "tokenUnitPrice": "0.9996991627152418",
+              "decimal": "18",
+              "isHoneyPot": false,
+              "taxRate": "0"
+            },
+            "toToken": {
+              "tokenContractAddress": "0x390a684ef9cade28a7ad0dfa61ab1eb3842618c4",
+              "tokenSymbol": "AAPLon",
+              "tokenUnitPrice": "332.550365944130840029",
+              "decimal": "18",
+              "isHoneyPot": false,
+              "taxRate": "0"
+            },
+            "dexRouterList": [
+              {
+                "dexProtocol": {
+                  "dexName": "Rfq Halfmoon",
+                  "percent": "100.00"
+                },
+                "fromToken": {
+                  "tokenContractAddress": "0x55d398326f99059ff775485246999027b3197955",
+                  "tokenSymbol": "USDT",
+                  "tokenUnitPrice": "0.9996991627152418",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "fromTokenIndex": "0",
+                "toToken": {
+                  "tokenContractAddress": "0x390a684ef9cade28a7ad0dfa61ab1eb3842618c4",
+                  "tokenSymbol": "AAPLon",
+                  "tokenUnitPrice": "332.550365944130840029",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "toTokenIndex": "1"
+              }
+            ],
+            "approveTarget": "0xB44446b0c8E56988c34f7Ff73Ae904982b5FdDA5",
+            "isBest": true,
+            "feeAmount": null,
+            "feeToken": null,
+            "actualSwapAmount": null
+          }
+        ],
+        "timestamp": 1790900456805,
+        "success": true
+      }
+    },
+    {
+      "underlying_ticker": "GOOGL",
+      "token_symbol": "GOOGLB",
+      "platform_id": "bstock",
+      "token_contract": "0x3f53de71c126bdabae20f9cd64848d317f6c3238",
+      "market_cap": 4208075976650.0,
+      "http_status": 200,
+      "code": 0,
+      "msg": "success",
+      "fee_slippage_fields": [
+        "estimateGasFee",
+        "feeAmount",
+        "feeToken",
+        "priceImpactPercent",
+        "tradeFee"
+      ],
+      "envelope": {
+        "code": 0,
+        "msg": "success",
+        "data": [
+          {
+            "quoteId": "55a7753d2b074249a77d78d3304c3016",
+            "vendorName": "LiquidMesh",
+            "executionMode": "SWAP",
+            "binanceChainId": "56",
+            "fromTokenAmount": "1000000000000000000000",
+            "toTokenAmount": "2940623223366249795",
+            "tradeFee": "0.01817552",
+            "estimateGasFee": "450000",
+            "priceImpactPercent": "0.0012198024",
+            "router": "0x55d398326f99059ff775485246999027b3197955--0x3f53de71c126bdabae20f9cd64848d317f6c3238",
+            "fromToken": {
+              "tokenContractAddress": "0x55d398326f99059fF775485246999027B3197955",
+              "tokenSymbol": "USDT",
+              "tokenUnitPrice": "0.9997071348184468",
+              "decimal": "18",
+              "isHoneyPot": false,
+              "taxRate": "0"
+            },
+            "toToken": {
+              "tokenContractAddress": "0x3f53de71c126bdabae20f9cd64848d317f6c3238",
+              "tokenSymbol": "GOOGLB",
+              "tokenUnitPrice": "340.05248746606896191379000000",
+              "decimal": "18",
+              "isHoneyPot": false,
+              "taxRate": "0"
+            },
+            "dexRouterList": [
+              {
+                "dexProtocol": {
+                  "dexName": "Pancakeswap V3",
+                  "percent": "20.00"
+                },
+                "fromToken": {
+                  "tokenContractAddress": "0x55d398326f99059ff775485246999027b3197955",
+                  "tokenSymbol": "USDT",
+                  "tokenUnitPrice": "0.9997071348184468",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "fromTokenIndex": "0",
+                "toToken": {
+                  "tokenContractAddress": "0x3f53de71c126bdabae20f9cd64848d317f6c3238",
+                  "tokenSymbol": "GOOGLB",
+                  "tokenUnitPrice": "340.05248746606896191379000000",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "toTokenIndex": "1"
+              },
+              {
+                "dexProtocol": {
+                  "dexName": "Uniswap V4",
+                  "percent": "50.00"
+                },
+                "fromToken": {
+                  "tokenContractAddress": "0x55d398326f99059ff775485246999027b3197955",
+                  "tokenSymbol": "USDT",
+                  "tokenUnitPrice": "0.9997071348184468",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "fromTokenIndex": "0",
+                "toToken": {
+                  "tokenContractAddress": "0x3f53de71c126bdabae20f9cd64848d317f6c3238",
+                  "tokenSymbol": "GOOGLB",
+                  "tokenUnitPrice": "340.05248746606896191379000000",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "toTokenIndex": "1"
+              },
+              {
+                "dexProtocol": {
+                  "dexName": "Pancakeswap V3",
+                  "percent": "30.00"
+                },
+                "fromToken": {
+                  "tokenContractAddress": "0x55d398326f99059ff775485246999027b3197955",
+                  "tokenSymbol": "USDT",
+                  "tokenUnitPrice": "0.9997071348184468",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "fromTokenIndex": "0",
+                "toToken": {
+                  "tokenContractAddress": "0x3f53de71c126bdabae20f9cd64848d317f6c3238",
+                  "tokenSymbol": "GOOGLB",
+                  "tokenUnitPrice": "340.05248746606896191379000000",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "toTokenIndex": "1"
+              }
+            ],
+            "approveTarget": "0xB44446b0c8E56988c34f7Ff73Ae904982b5FdDA5",
+            "isBest": true,
+            "feeAmount": null,
+            "feeToken": null,
+            "actualSwapAmount": null
+          }
+        ],
+        "timestamp": 1790900457417,
+        "success": true
+      }
+    },
+    {
+      "underlying_ticker": "MSFT",
+      "token_symbol": "MSFTB",
+      "platform_id": "bstock",
+      "token_contract": "0x80106cb3ead06659a5ad19df39d9b4733863b9b0",
+      "market_cap": 3808562282334.0,
+      "http_status": 200,
+      "code": 0,
+      "msg": "success",
+      "fee_slippage_fields": [
+        "estimateGasFee",
+        "feeAmount",
+        "feeToken",
+        "priceImpactPercent",
+        "tradeFee"
+      ],
+      "envelope": {
+        "code": 0,
+        "msg": "success",
+        "data": [
+          {
+            "quoteId": "1eb818f4f73a4a2f810cb31f7d895999",
+            "vendorName": "LiquidMesh",
+            "executionMode": "SWAP",
+            "binanceChainId": "56",
+            "fromTokenAmount": "1000000000000000000000",
+            "toTokenAmount": "1932870189769931112",
+            "tradeFee": "0.01812134",
+            "estimateGasFee": "450000",
+            "priceImpactPercent": "0.0028862720",
+            "router": "0x55d398326f99059ff775485246999027b3197955--0x80106cb3ead06659a5ad19df39d9b4733863b9b0",
+            "fromToken": {
+              "tokenContractAddress": "0x55d398326f99059fF775485246999027B3197955",
+              "tokenSymbol": "USDT",
+              "tokenUnitPrice": "0.9996991627152418",
+              "decimal": "18",
+              "isHoneyPot": false,
+              "taxRate": "0"
+            },
+            "toToken": {
+              "tokenContractAddress": "0x80106cb3ead06659a5ad19df39d9b4733863b9b0",
+              "tokenSymbol": "MSFTB",
+              "tokenUnitPrice": "517.30883365186231313235000000",
+              "decimal": "18",
+              "isHoneyPot": false,
+              "taxRate": "0"
+            },
+            "dexRouterList": [
+              {
+                "dexProtocol": {
+                  "dexName": "Pancakeswap V3",
+                  "percent": "100.00"
+                },
+                "fromToken": {
+                  "tokenContractAddress": "0x55d398326f99059ff775485246999027b3197955",
+                  "tokenSymbol": "USDT",
+                  "tokenUnitPrice": "0.9996991627152418",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "fromTokenIndex": "0",
+                "toToken": {
+                  "tokenContractAddress": "0x80106cb3ead06659a5ad19df39d9b4733863b9b0",
+                  "tokenSymbol": "MSFTB",
+                  "tokenUnitPrice": "517.30883365186231313235000000",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "toTokenIndex": "1"
+              }
+            ],
+            "approveTarget": "0xB44446b0c8E56988c34f7Ff73Ae904982b5FdDA5",
+            "isBest": true,
+            "feeAmount": null,
+            "feeToken": null,
+            "actualSwapAmount": null
+          }
+        ],
+        "timestamp": 1790900458037,
+        "success": true
+      }
+    },
+    {
+      "underlying_ticker": "AMZN",
+      "token_symbol": "AMZNon",
+      "platform_id": "ondo",
+      "token_contract": "0x4553cfe1c09f37f38b12dc509f676964e392f8fc",
+      "market_cap": 2676762392525.0,
+      "http_status": 200,
+      "code": 0,
+      "msg": "success",
+      "fee_slippage_fields": [
+        "estimateGasFee",
+        "feeAmount",
+        "feeToken",
+        "priceImpactPercent",
+        "tradeFee"
+      ],
+      "envelope": {
+        "code": 0,
+        "msg": "success",
+        "data": [
+          {
+            "quoteId": "3c6c114e9bad4ce29ffe5ed0b8b1e03a",
+            "vendorName": "LiquidMesh",
+            "executionMode": "SWAP",
+            "binanceChainId": "56",
+            "fromTokenAmount": "1000000000000000000000",
+            "toTokenAmount": "3053086894787611971",
+            "tradeFee": "0.01924618",
+            "estimateGasFee": "450000",
+            "priceImpactPercent": "0.2372803012",
+            "router": "0x55d398326f99059ff775485246999027b3197955--0x2170ed0880ac9a755fd29b2688956bd959f933f8--0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d--0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c--0x4553cfe1c09f37f38b12dc509f676964e392f8fc",
+            "fromToken": {
+              "tokenContractAddress": "0x55d398326f99059fF775485246999027B3197955",
+              "tokenSymbol": "USDT",
+              "tokenUnitPrice": "0.9997071348184468",
+              "decimal": "18",
+              "isHoneyPot": false,
+              "taxRate": "0"
+            },
+            "toToken": {
+              "tokenContractAddress": "0x4553cfe1c09f37f38b12dc509f676964e392f8fc",
+              "tokenSymbol": "AMZNon",
+              "tokenUnitPrice": "249.263043",
+              "decimal": "18",
+              "isHoneyPot": false,
+              "taxRate": "0"
+            },
+            "dexRouterList": [
+              {
+                "dexProtocol": {
+                  "dexName": "Rfq Halfmoon",
+                  "percent": "100.00"
+                },
+                "fromToken": {
+                  "tokenContractAddress": "0x55d398326f99059ff775485246999027b3197955",
+                  "tokenSymbol": "USDT",
+                  "tokenUnitPrice": "0.9997071348184468",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "fromTokenIndex": "0",
+                "toToken": {
+                  "tokenContractAddress": "0x2170ed0880ac9a755fd29b2688956bd959f933f8",
+                  "tokenSymbol": "BSC_ETH",
+                  "tokenUnitPrice": "2702.15420362209866273945831500096433",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "toTokenIndex": "1"
+              },
+              {
+                "dexProtocol": {
+                  "dexName": "Rfq Halfmoon",
+                  "percent": "100.00"
+                },
+                "fromToken": {
+                  "tokenContractAddress": "0x2170ed0880ac9a755fd29b2688956bd959f933f8",
+                  "tokenSymbol": "BSC_ETH",
+                  "tokenUnitPrice": "2702.15420362209866273945831500096433",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "fromTokenIndex": "1",
+                "toToken": {
+                  "tokenContractAddress": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+                  "tokenSymbol": "USDC",
+                  "tokenUnitPrice": "1.000003336341446",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "toTokenIndex": "2"
+              },
+              {
+                "dexProtocol": {
+                  "dexName": "Rfq Halfmoon",
+                  "percent": "100.00"
+                },
+                "fromToken": {
+                  "tokenContractAddress": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+                  "tokenSymbol": "USDC",
+                  "tokenUnitPrice": "1.000003336341446",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "fromTokenIndex": "2",
+                "toToken": {
+                  "tokenContractAddress": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+                  "tokenSymbol": "WBNB",
+                  "tokenUnitPrice": "772.382272228162877611192951016073537859",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "toTokenIndex": "3"
+              },
+              {
+                "dexProtocol": {
+                  "dexName": "Pancakeswap V2",
+                  "percent": "100.00"
+                },
+                "fromToken": {
+                  "tokenContractAddress": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+                  "tokenSymbol": "WBNB",
+                  "tokenUnitPrice": "772.382272228162877611192951016073537859",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "fromTokenIndex": "3",
+                "toToken": {
+                  "tokenContractAddress": "0x4553cfe1c09f37f38b12dc509f676964e392f8fc",
+                  "tokenSymbol": "AMZNon",
+                  "tokenUnitPrice": "249.263043",
+                  "decimal": "18",
+                  "isHoneyPot": false,
+                  "taxRate": "0"
+                },
+                "toTokenIndex": "4"
+              }
+            ],
+            "approveTarget": "0xB44446b0c8E56988c34f7Ff73Ae904982b5FdDA5",
+            "isBest": true,
+            "feeAmount": null,
+            "feeToken": null,
+            "actualSwapAmount": null
+          }
+        ],
+        "timestamp": 1790900458858,
+        "success": true
+      }
+    }
+  ]
+}

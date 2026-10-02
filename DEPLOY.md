@@ -70,23 +70,30 @@ appear in the environment.
 
 ## Execution plan (LATER phase — nothing below has been run)
 
-1. `nf login --token <token>` (or `Authorization: Bearer <token without the `NF-` prefix>` on `https://api.northflank.com/v1`) — token file `~/.hermes/secrets/northflank_stockgap_token`.
+**Invariant: secrets + volume are attached BEFORE the first container start.**
+Nothing may run until both are in place — so the service is created with
+`instances: 0`, wired up, and only then scaled to `instances: 1` (the explicit
+target steady state).
+
+1. `nf login --token $NF_TOKEN` (or send `Authorization: Bearer $NF_TOKEN` to `https://api.northflank.com/v1`, with the `NF-` prefix stripped from the stored token) — token file `~/.hermes/secrets/northflank_stockgap_token`.
 2. **Secrets first**: `POST /v1/projects/stockgap/secrets` (or `nf create secret`) for `BINANCE_WEB3_API_KEY`, `BINANCE_WEB3_SECRET_KEY`, `TELEGRAM_BOT_TOKEN` (`type: secret`, `secretType: environment`).
-3. Create the **combined** service `stockgap-app` in project `stockgap`:
+3. Create the **combined** service `stockgap-app` in project `stockgap` with **`instances: 0`** (created, never started):
    - build: repo `Alejdro83/stockgap-agent`, branch `master`, Dockerfile `/Dockerfile`, workdir `/`, `vcsLinkId 6ac0362d327671b9c4eb4d22`
    - billing: `deploymentPlan` (e.g. `nf-compute-100-1`) **plus** `buildPlan` (e.g. `nf-compute-400-16`) — billing is mandatory
+   - `deployment.instances: 0` — held at zero until steps 4–5 are done
    - `runtime.ports`: name `http`, port `8098`, protocol `HTTP`, `publicNetworkAccess: true`
    - `docker.configType: "default"` (the Dockerfile CMD is the supervisor)
-4. **Volume**: attach a persistent volume to the service, mount path `/data`, ≥10 GB (host data: DB ~356 MB + JSONL ~740 MB and growing; logs rotate nowhere).
+4. **Volume** (BEFORE first start): attach a persistent volume to the service, mount path `/data`, ≥10 GB (host data: DB ~356 MB + JSONL ~740 MB and growing; logs rotate nowhere).
 5. **Link the three secrets to the service** (`PATCH /v1/projects/stockgap/secrets/{name}` with `{"serviceIds": ["<service-id>"]}`) — BEFORE first start.
-6. Health check: HTTP **200 on `/`** (port 8098). (The image also carries a Docker `HEALTHCHECK` doing the same.)
-7. Deploy; poll `GET /v1/projects/stockgap/services` until `status.build == SUCCESS` and `status.deployment` is `RUNNING` (`data.services[]` nesting).
-8. Verify: `GET /` returns the dashboard; on the volume `/data/spread_ticks.db` is created and growing, `/data/logs/{dashboard,watchdog,oracle-cron,alerts-cron}.log` and `/data/collector.log` are tailing; `nf command-exec` → exactly one `run_collector.py` process (pidfile `/data/collector.pid`).
-9. Keep `disabledCD: false` so pushes to `master` auto-rebuild.
+6. **First start**: scale to **`instances: 1`** — the first container boots only now, with the volume mounted and all secrets already in its environment (the invariant above). Steady state is explicitly `instances: 1`.
+7. Health check: HTTP **200 on `/`** (port 8098). (The image also carries a Docker `HEALTHCHECK` doing the same.)
+8. Deploy; poll `GET /v1/projects/stockgap/services` until `status.build == SUCCESS` and `status.deployment` is `RUNNING` (`data.services[]` nesting).
+9. Verify: `GET /` returns the dashboard; on the volume `/data/spread_ticks.db` is created and growing, `/data/logs/{dashboard,watchdog,oracle-cron,alerts-cron}.log` and `/data/collector.log` are tailing (`/data/collector.log` also reaches container stdout via `tail -F`); `nf command-exec` → exactly one `run_collector.py` process (pidfile `/data/collector.pid`).
+10. Keep `disabledCD: false` so pushes to `master` auto-rebuild.
 
 ## Risks / caveats
 
-- Binance Web3 credentials are file-based at a hardcoded path; the entrypoint bridges `BINANCE_WEB3_*` env → files. Missing both ⇒ collector crash-loops under the watchdog (dashboard keeps working).
+- Binance Web3 credentials are file-based at a hardcoded path; the entrypoint bridges `BINANCE_WEB3_*` env → files (umask 077, failures logged), then **unsets the env vars** so the internet-facing dashboard (`POST /mcp`) never carries them; its loop also starts with `env -u TELEGRAM_BOT_TOKEN`. Missing both files ⇒ collector crash-loops under the watchdog (the tracebacks land in `/data/collector.log` and reach container stdout via `tail -F`; dashboard keeps working).
 - All crons live in one container as sleep loops: cadence drifts by the task duration (minutes-level, fine for 2–5 min crons). Oracle overlap is guarded by `flock -n` exactly like the host.
 - A stale `collector.pid` on the volume can't fool the watchdog (entrypoint deletes it at startup), but PID checks only work within the container's PID namespace — correct here.
 - SQLite WAL runs on the Northflank volume; `busy_timeout=10s` + `BEGIN IMMEDIATE` (see `stockgap/db.py`) absorb slower storage, but volume I/O latency directly affects tick cadence.
