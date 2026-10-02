@@ -208,7 +208,7 @@ stockgap-agent/
 
 ## 📜 License
 
-TBD — no `LICENSE` file has been committed yet.
+MIT — see [LICENSE](./LICENSE).
 
 <!-- ENTRY-URLS: TODO(alex): track + per-stage URLs -->
 
