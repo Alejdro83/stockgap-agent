@@ -1,0 +1,32 @@
+{
+  "note": "How work was actually scheduled during the StockGap build (2026-10-02 evidence harvest).",
+  "seat_to_model": {
+    "_tag": "operator-attested (roster has no DX-LOG/git basis)",
+    "strategist_lisa": {"harness": "hermes (Telegram)", "model": "xiaomi-mimo/mimo-v2.6-pro"},
+    "builder_claude": {"harness": "claude -p", "model": "claude (Anthropic)"},
+    "executor_mimo_subagent": {"harness": "hermes delegate_task", "model": "xiaomi-mimo/mimo-v2.6-pro"}
+  },
+  "coordination": {
+    "mode": "on-demand coordinator-led",
+    "reinforcement": false,
+    "autonomy_turns": "n/a — no fixed turn loop; each delegation bounded by its task spec"
+  },
+  "cron_jobs": {
+    "verbatim": [
+      "*/5 * * * * /home/lab-master/stockgap-agent/scripts/ensure_collector.sh",
+      "*/2 * * * * cd /home/lab-master/stockgap-agent && /usr/bin/python3 scripts/alerts.py >> data/alerts-cron.log 2>&1",
+      "*/5 * * * * cd /home/lab-master/stockgap-agent && /usr/bin/flock -n data/oracle.lock /usr/bin/python3 stockgap/oracle.py --once >> data/oracle-cron.log 2>&1"
+    ],
+    "verbatim_source": "crontab -l, 2026-10-02 (only the 3 StockGap entries copied, verbatim)",
+    "filtered_out": [
+      "comfyui-watchdog.sh (every 15 min) — excluded: unrelated to this project (machine also runs unrelated comfyui crons)",
+      "comfyui-gallery-sync.sh (every 3 min) — excluded: unrelated to this project"
+    ],
+    "filtered_out_note": "The machine's full crontab must not be copied; only the 3 StockGap lines above belong to this project. The two comfyui jobs are named here solely to document the exclusion."
+  },
+  "intervals": [
+    {"job": "collector watchdog (scripts/ensure_collector.sh)", "schedule": "*/5 * * * *", "interval": "every 5 minutes"},
+    {"job": "alerts scan (scripts/alerts.py, one-shot)", "schedule": "*/2 * * * *", "interval": "every 2 minutes"},
+    {"job": "oracle reference refresh (stockgap/oracle.py --once, under flock)", "schedule": "*/5 * * * *", "interval": "every 5 minutes"}
+  ]
+}

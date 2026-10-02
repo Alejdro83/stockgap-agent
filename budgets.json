@@ -1,0 +1,12 @@
+{
+  "currency": "USD",
+  "tracking": "none — no per-seat metering was enabled during the build",
+  "lock_behavior": "no budget lock was configured or enforced; all caps null",
+  "roles": {
+    "strategist_lisa": {"harness": "hermes", "model": "xiaomi-mimo/mimo-v2.6-pro", "hard_cap_usd": null, "spent_usd": null, "status": "not tracked"},
+    "builder_claude": {"harness": "claude -p", "model": "claude", "hard_cap_usd": null, "spent_usd": null, "status": "not tracked"},
+    "executor_mimo_subagent": {"harness": "hermes delegate_task", "model": "xiaomi-mimo/mimo-v2.6-pro", "hard_cap_usd": null, "spent_usd": null, "status": "not tracked"}
+  },
+  "onchain_measured": {"demo_trade_gas_bnb_total": "0.0000845", "source": "DX-LOG receipts + measured balance delta"},
+  "free_tier_note": "not recorded"
+}
