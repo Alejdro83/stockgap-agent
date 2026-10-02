@@ -1,0 +1,31 @@
+{
+  "rwa_tokens": {
+    "endpoint": "GET /build/api/v1/dex/market/rwa/tokens",
+    "params": {},
+    "http_status": 200,
+    "code": 0,
+    "secret_variant": "stripped"
+  },
+  "rwa_price": {
+    "endpoint": "GET /build/api/v1/dex/market/rwa/price",
+    "params": {
+      "tokenContractAddresses": "0x7af44d51d1fb88c5b74fc71d3cba649bb8099d14",
+      "binanceChainId": "56"
+    },
+    "http_status": 200,
+    "code": 0,
+    "secret_variant": "stripped",
+    "discovered_by": "live probing (no param table in docs)"
+  },
+  "rwa_underlying_market": {
+    "endpoint": "GET /build/api/v1/dex/market/rwa/underlying-market",
+    "params": {
+      "binanceChainId": "56",
+      "tokenContractAddress": "0x7af44d51d1fb88c5b74fc71d3cba649bb8099d14"
+    },
+    "http_status": 200,
+    "code": 0,
+    "secret_variant": "stripped",
+    "discovered_by": "live probing (no param table in docs)"
+  }
+}

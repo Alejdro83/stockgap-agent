@@ -1,0 +1,203 @@
+[
+  {
+    "step": "load_credentials",
+    "api_key_len": 39,
+    "secret_variants": [
+      "stripped",
+      "raw_with_trailing_newline"
+    ]
+  },
+  {
+    "step": "probe_secret_variant",
+    "variant": "stripped",
+    "http_status": 200,
+    "code": 0,
+    "msg": "success"
+  },
+  {
+    "step": "fetch",
+    "path": "/api/v1/dex/market/rwa/tokens",
+    "http_status": 200,
+    "code": 0,
+    "success": true
+  },
+  {
+    "step": "sample_token",
+    "symbol": "ACNon",
+    "address": "0x7af44d51d1fb88c5b74fc71d3cba649bb8099d14",
+    "underlying": "ACN",
+    "fields": [
+      "assetType",
+      "binanceChainId",
+      "decimals",
+      "marketCap",
+      "peRatioTTM",
+      "platformId",
+      "referencePrice",
+      "statusInfo",
+      "tags",
+      "tokenContractAddress",
+      "tokenLogoUrl",
+      "tokenName",
+      "tokenPrice",
+      "tokenSymbol",
+      "tokenToShareRatio",
+      "underlyingName",
+      "underlyingNameZh",
+      "underlyingTicker",
+      "volume24H"
+    ]
+  },
+  {
+    "step": "multiplier_fields",
+    "fields": []
+  },
+  {
+    "step": "probe_params",
+    "path": "/api/v1/dex/market/rwa/price",
+    "params": {},
+    "code": 40001,
+    "msg": "Parameter binanceChainId is required"
+  },
+  {
+    "step": "probe_params",
+    "path": "/api/v1/dex/market/rwa/price",
+    "params": {
+      "symbols": "ACNon"
+    },
+    "code": 40001,
+    "msg": "Parameter binanceChainId is required"
+  },
+  {
+    "step": "probe_params",
+    "path": "/api/v1/dex/market/rwa/price",
+    "params": {
+      "symbol": "ACNon"
+    },
+    "code": 40001,
+    "msg": "Parameter binanceChainId is required"
+  },
+  {
+    "step": "probe_params",
+    "path": "/api/v1/dex/market/rwa/price",
+    "params": {
+      "symbols": "ACNon",
+      "binanceChainId": "56"
+    },
+    "code": 40001,
+    "msg": "Parameter tokenContractAddresses is required"
+  },
+  {
+    "step": "probe_params",
+    "path": "/api/v1/dex/market/rwa/price",
+    "params": {
+      "binanceChainId": "56",
+      "symbol": "ACNon"
+    },
+    "code": 40001,
+    "msg": "Parameter tokenContractAddresses is required"
+  },
+  {
+    "step": "probe_params",
+    "path": "/api/v1/dex/market/rwa/price",
+    "params": {
+      "tokenContractAddress": "0x7af44d51d1fb88c5b74fc71d3cba649bb8099d14",
+      "binanceChainId": "56"
+    },
+    "code": 40001,
+    "msg": "Parameter tokenContractAddresses is required"
+  },
+  {
+    "step": "probe_params",
+    "path": "/api/v1/dex/market/rwa/price",
+    "params": {
+      "tokenContractAddresses": "0x7af44d51d1fb88c5b74fc71d3cba649bb8099d14",
+      "binanceChainId": "56"
+    },
+    "code": 0,
+    "msg": "success"
+  },
+  {
+    "step": "price_result",
+    "working_params": {
+      "tokenContractAddresses": "0x7af44d51d1fb88c5b74fc71d3cba649bb8099d14",
+      "binanceChainId": "56"
+    }
+  },
+  {
+    "step": "probe_params",
+    "path": "/api/v1/dex/market/rwa/underlying-market",
+    "params": {},
+    "code": 40001,
+    "msg": "Parameter binanceChainId is required"
+  },
+  {
+    "step": "probe_params",
+    "path": "/api/v1/dex/market/rwa/underlying-market",
+    "params": {
+      "symbol": "ACN"
+    },
+    "code": 40001,
+    "msg": "Parameter binanceChainId is required"
+  },
+  {
+    "step": "probe_params",
+    "path": "/api/v1/dex/market/rwa/underlying-market",
+    "params": {
+      "symbols": "ACN"
+    },
+    "code": 40001,
+    "msg": "Parameter binanceChainId is required"
+  },
+  {
+    "step": "probe_params",
+    "path": "/api/v1/dex/market/rwa/underlying-market",
+    "params": {
+      "symbol": "ACNon"
+    },
+    "code": 40001,
+    "msg": "Parameter binanceChainId is required"
+  },
+  {
+    "step": "probe_params",
+    "path": "/api/v1/dex/market/rwa/underlying-market",
+    "params": {
+      "symbol": "ACN",
+      "binanceChainId": "56"
+    },
+    "code": 40001,
+    "msg": "Parameter tokenContractAddress is required"
+  },
+  {
+    "step": "probe_params",
+    "path": "/api/v1/dex/market/rwa/underlying-market",
+    "params": {
+      "underlyingSymbol": "ACN"
+    },
+    "code": 40001,
+    "msg": "Parameter binanceChainId is required"
+  },
+  {
+    "step": "probe_params",
+    "path": "/api/v1/dex/market/rwa/underlying-market",
+    "params": {
+      "tokenSymbol": "ACNon"
+    },
+    "code": 40001,
+    "msg": "Parameter binanceChainId is required"
+  },
+  {
+    "step": "probe_params",
+    "path": "/api/v1/dex/market/rwa/underlying-market",
+    "params": {
+      "symbol": "ACN",
+      "market": "US"
+    },
+    "code": 40001,
+    "msg": "Parameter binanceChainId is required"
+  },
+  {
+    "step": "underlying_market_result",
+    "working_params": null
+  }
+]
