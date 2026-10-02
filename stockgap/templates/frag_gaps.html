@@ -1,0 +1,30 @@
+<div class="flex items-center justify-between mb-2 text-xs">
+  <span class="text-gray-600">Métrica: <b class="font-mono">{{ metric }}</b>{% if metric == 'spread_bps' %} (bruta){% else %} (real){% endif %}
+    · tick hace {{ last_ts|age }}</span>
+  <button class="px-2 py-1 rounded border {{ 'bg-blue-600 text-white border-blue-600' if closed_only else 'bg-white text-gray-700' }}"
+          onclick="window.closedOnly = {{ 0 if closed_only else 1 }}; htmx.trigger('#pane-gaps-body', 'gapsrefresh')">
+    {{ '✔ solo mercado cerrado' if closed_only else 'solo mercado cerrado' }}
+  </button>
+</div>
+{% if last_ts is none %}
+  <p class="text-center text-gray-500 py-6">Aún no hay ticks del collector. Los gaps aparecerán en cuanto llegue el primero.</p>
+{% elif not rows %}
+  <p class="text-center text-gray-500 py-6">Sin resultados{% if closed_only %} con mercado cerrado en el último tick ({{ total }} tokens, todos con mercado abierto){% endif %}. Quita el filtro para ver todos.</p>
+{% else %}
+  <ul class="space-y-2">
+  {% for r in rows %}
+    <li class="bg-white rounded shadow p-2">
+      <div class="flex items-center justify-between">
+        <span class="font-bold">{{ r.token_symbol }} <span class="text-xs font-normal text-gray-500">({{ r.underlying_ticker }})</span></span>
+        <span class="font-mono font-bold {{ 'text-green-700' if r.metric_bps > 0 else 'text-red-700' }}">{{ '%+.2f'|format(r.metric_bps) }} bps</span>
+      </div>
+      <div class="text-xs text-gray-700 mt-1">Token {{ r.token_price|num(4) }} vs ref {{ r.reference_price|num(4) }}{% if r.ratio_differs %} · ratio {{ r.token_to_share_ratio|num(4) }}{% endif %}</div>
+      <div class="flex gap-1 mt-1 text-xs">
+        <span class="px-1.5 rounded {{ 'bg-purple-100 text-purple-800' if r.platform_id == 'ondo' else 'bg-amber-100 text-amber-800' }}">{{ r.platform_id }}</span>
+        <span class="px-1.5 rounded {{ 'bg-green-100 text-green-800' if r.open_state else 'bg-gray-200 text-gray-700' }}">{{ r.market_status or ('abierto' if r.open_state else 'cerrado') }}</span>
+        {% if r.reference_kind %}<span class="px-1.5 rounded bg-blue-100 text-blue-800">{{ r.reference_kind }}</span>{% endif %}
+      </div>
+    </li>
+  {% endfor %}
+  </ul>
+{% endif %}

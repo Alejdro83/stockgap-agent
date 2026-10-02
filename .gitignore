@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 .env
 .venv/
+data/
+*.log
+youtube_uploader_mcp.log

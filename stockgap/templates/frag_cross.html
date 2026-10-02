@@ -1,0 +1,15 @@
+<p class="text-xs text-gray-600 mb-2">Mismo subyacente en distintas plataformas · líderes por spread implícito{% if last_ts %} · tick hace {{ last_ts|age }}{% endif %}</p>
+{% if not rows %}
+  <p class="text-center text-gray-500 py-6">Sin datos cross-issuer todavía. Aparecen cuando un subyacente cotiza en 2+ emisores.</p>
+{% else %}
+  <ul class="space-y-2">
+  {% for r in rows %}
+    <li class="bg-white rounded shadow p-2">
+      <div class="flex justify-between"><span class="font-bold">{{ r.underlying_ticker }} <span class="text-xs font-normal text-gray-500">{{ r.n_issuers }} emisores</span></span>
+        <span class="font-mono font-bold">{{ '%.2f'|format(r.bps) }} bps</span></div>
+      <div class="text-xs mt-1">Barato: <b>{{ r.cheap_symbol }}</b> ({{ r.cheap_platform }}) {{ r.cheap_implied|num(4) }}</div>
+      <div class="text-xs">Caro: <b>{{ r.rich_symbol }}</b> ({{ r.rich_platform }}) {{ r.rich_implied|num(4) }}</div>
+    </li>
+  {% endfor %}
+  </ul>
+{% endif %}

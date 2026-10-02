@@ -1,0 +1,25 @@
+<div class="bg-blue-50 border border-blue-200 rounded p-3 text-sm mb-2">
+  <p class="font-bold">¿Qué es el oráculo?</p>
+  <p>El precio implícito de la apertura del lunes mientras el mercado duerme.</p>
+</div>
+<div class="grid grid-cols-2 gap-2 mb-2 text-center">
+  <div class="bg-white rounded shadow p-2"><div class="text-2xl font-bold">{{ count_today }}</div><div class="text-xs text-gray-600">predicciones hoy (UTC)</div></div>
+  <div class="bg-white rounded shadow p-2"><div class="text-2xl font-bold">{{ latest_ts|age if latest_ts else '—' }}</div><div class="text-xs text-gray-600">edad del último snapshot</div></div>
+</div>
+{% if latest_ts is none %}
+  <p class="text-center text-gray-500 py-3">Aún no hay predicciones del oráculo (total {{ total }}).</p>
+{% else %}
+  <p class="text-xs text-gray-600 mb-2">Total histórico: {{ total }} · con desviación marcada en el último snapshot: {{ flagged }}</p>
+{% endif %}
+<h3 class="font-bold text-sm mt-3 mb-1">Puntuación (oracle_reputation)</h3>
+{% if not reputation_exists %}
+  <p class="bg-white rounded shadow p-3 text-sm text-gray-600">Todavía no hay puntuación: se calcula el lunes, cuando abre el mercado y se compara cada predicción con la apertura real.</p>
+{% elif not reputation %}
+  <p class="bg-white rounded shadow p-3 text-sm text-gray-600">La tabla de puntuación existe pero está vacía (aún no se ha puntuado ninguna apertura).</p>
+{% else %}
+  <p class="text-xs text-gray-500 mb-1">Últimas {{ reputation|length }} de {{ rep_n }} filas</p>
+  <div class="overflow-x-auto"><table class="w-full text-xs bg-white rounded shadow">
+    <tr class="text-left bg-gray-50"><th class="p-1">Token</th><th>Pred.</th><th>Real</th><th>Err %</th><th>Dir</th><th>Score</th></tr>
+    {% for r in reputation %}<tr class="border-t"><td class="p-1">{{ r.token_symbol or r.underlying_ticker }}</td><td>{{ r.predicted_open|num(2) }}</td><td>{{ r.actual_open|num(2) }}</td><td>{{ r.abs_pct_error|num(2) }}</td><td>{{ '✔' if r.direction_hit else '✘' }}</td><td class="font-bold">{{ r.oracle_score|num(1) }}</td></tr>{% endfor %}
+  </table></div>
+{% endif %}
