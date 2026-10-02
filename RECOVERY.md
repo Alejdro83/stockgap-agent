@@ -44,15 +44,21 @@ Suite total: 15+28+23+9+13+16+14+27+30+24 = **199 passed** (measured:
   "quoteId-TTL min-return race".
 - **The diagnosis was WRONG** and is explicitly retracted in DX-LOG (anchor:
   `Route: expired`, DX-LOG "Quote-and-swap Flash API… TRUE root cause").
-- **Recovery:** `eth_call` replay of the exact tx calldata reverted with
+- **Recovery:** `eth_call` replay of the exact tx calldata of the two later txs
+  (`0x9ca3…`, `0x7c33…`) reverted with
   `execution reverted: Route: expired`; decoding the calldata's uint64 BE
   timestamps (build at byte offset 1696; `valid-until` at 3424/3968 = build + 2s)
-  proved a **2-second in-calldata route deadline**. Inclusion landed +0.8s / +0.1s
-  past the deadline on the two later runs; identical `gasUsed` across routes = the
+  proved a **2-second in-calldata route deadline** for those two txs. For this first
+  tx (`0xfdc9…`) the same cause is **INFERRED** (identical pattern — same execution
+  depth, auto-slippage — not replayed). Inclusion landed +0.8s / +0.1s
+  past the deadline on the two replayed runs; near-identical `gasUsed` (519968 /
+  519967) across those two routes = the
   same deterministic `require`. Quote→broadcast alone takes ~2s over the public BSC
-  relay — structurally past `valid-until`. Min-return was never exercised (8% band
-  unreachable at this size). The corrected diagnosis replaced the wrong one in
-  DX-LOG before submission.
+  relay — structurally past `valid-until`. Min-return was not the cause of the three
+  broadcast reverts (a real simulate failure `Min return not reached` occurred at 1%
+  slippage on the first demo attempt; the 8% band was unreachable at this size). The
+  wrong diagnosis was retracted by an appended correction; the original text remains
+  in DX-LOG.
 - **Fixes for a future attempt (none taken — no further sends):** a route with a
   longer deadline; or inclusion inside 2s (private/low-latency relay); or
   executor-side deadline-word detection that aborts cheaply BEFORE broadcast when

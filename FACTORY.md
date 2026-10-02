@@ -1,8 +1,8 @@
 # FACTORY.md — How the StockGap multi-agent factory worked
 
 Evidence pack for the StockGap hackathon entry (BNB Hack: Tokenized Stocks Edition).
-Every quantitative claim below is traceable to `evidence-notes.md` (working harvest of
-live commands and file reads taken 2026-10-02 UTC). Provenance tags used throughout:
+Every quantitative claim below is traceable to DX-LOG.md, git, and commands re-run
+on 2026-10-02. Provenance tags used throughout:
 **measured** (a command/file in this repo or its live service), **doc** (recorded in
 `DX-LOG.md`/git/repo files), **operator-attested** (asserted by the operator, no
 DX-LOG/git basis).
@@ -19,7 +19,8 @@ DX-LOG/git basis).
 | MiMo subagent | executor (spread engine, modules) | Hermes `delegate_task` | `xiaomi-mimo/mimo-v2.6-pro` |
 
 Who-built-what (operator-attested): Claude built the dashboard; the MiMo subagent
-built the spread engine and most modules.
+built the spread engine (the per-module split beyond these two attributions is not
+recorded — see RECOVERY.md).
 
 ## 2. Factory design / work flow
 
@@ -74,11 +75,15 @@ outside the submitted repo tree; they are cited, not copied.
 
 ## 4. Design choices & trade-offs
 
-- **SQLite single-writer discipline** — the collector is the writer of market ticks;
-  every read path opens the DB read-only: dashboard `mode=ro&immutable=1`
+- **SQLite writer discipline** — the collector writes the tick tables and the oracle
+  writes its own tables (`oracle_predictions` + `oracle_reference` via
+  `stockgap/oracle.py`; `oracle_reputation` + `oracle_feedback` via
+  `stockgap/oracle_score.py`); every read path opens the DB
+  read-only: dashboard `mode=ro&immutable=1`
   (`stockgap/dashboard.py`), MCP tools `mode=ro` (`stockgap/mcp_server.py`), summary
-  CLI `mode=ro` (`scripts/summary.py`) (measured: grep of connection code). Two
-  narrow documented exceptions per DX-LOG: the alerts scanner writes only its own
+  CLI `mode=ro` (`scripts/summary.py`) (measured: grep of connection code). The
+  alerts/MCP paths run read-only `mode=ro` except two narrow documented writes per
+  DX-LOG: the alerts scanner writes only its own
   watermark rows (`alert_state`), and the MCP module's single write (`paid_calls`)
   occurs only after a verified payment. Trade-off: no concurrent writers, but no
   lock contention either.
@@ -107,9 +112,14 @@ diagnosis was **wrong** and is explicitly retracted in DX-LOG (line 258: "the
 'quoteId-TTL min-return race' diagnosis was wrong" — translated anchor). Recovery
 work — `eth_call` replay of the exact calldata plus decoding the embedded uint64
 timestamps (build at byte offset 1696, `valid-until` at 3424/3968 = build + 2s) —
-proved the true cause: a **2-second in-calldata route deadline** (`execution
+proved the true cause for `0x9ca3…` and `0x7c33…`: a **2-second in-calldata route
+deadline** (`execution
 reverted: Route: expired`), structurally past by the time inclusion landed
-(+0.8s / +0.1s past deadline on the two later runs). Min-return was never exercised.
+(+0.8s / +0.1s past deadline on those two replayed runs). The same cause for the
+first tx (`0xfdc9…`) is **INFERRED** (identical pattern — same execution depth,
+auto-slippage — not replayed). Min-return was not the cause of the three broadcast
+reverts (a real simulate failure `Min return not reached` occurred at 1% slippage
+on the first demo attempt).
 This is exactly the factory's verification loop working: a published diagnosis was
 re-derived from raw evidence and corrected before submission (doc: DX-LOG
 "Quote-and-swap Flash API… TRUE root cause").
@@ -127,7 +137,7 @@ the submission docs (operator-attested; no DX-LOG anchor).
 
 ## 6. Measured resources
 
-Only timings that can be sourced (Global timing rule — file mtimes, git timestamps,
+Only sourceable timings are cited (file mtimes, git timestamps,
 and the recorded live-check window; no PIDs, no unsourced wall-times):
 
 | Timing | Value | Source |

@@ -56,7 +56,7 @@ Built on BSC mainnet (chain 56) against the Binance Web3 API (OC gateway): an HM
         executor: quote → simulate → sign (local) → broadcast → receipt check
 ```
 
-- **Key decision** — SQLite single-writer: collector writes ticks; every read path opens `mode=ro` (dashboard adds `immutable=1`); the alert scanner writes only its watermark rows and the pay gate only its paid-call records.
+- **Key decision** — SQLite writer discipline: collector writes tick tables; the oracle writes its own tables (`oracle_predictions`/`oracle_reference`, `oracle_reputation`/`oracle_feedback`); every read path opens `mode=ro` (dashboard adds `immutable=1`); alerts/MCP are read-only `mode=ro` except two narrow documented writes — the alert scanner's watermark rows (`alert_state`) and the pay gate's paid-call records (`paid_calls`).
 - **Key decision** — one price source per metric (provenance rule) so no series is ambiguous about its frame.
 - **Key decision** — label, don't backfill: missing independent closes stay `derived`, never fabricated.
 
@@ -117,7 +117,7 @@ Per-module test counts (measured: `grep -c 'def test_' tests/*.py`; no build-ord
 
 Recorded suite-size checkpoints in DX-LOG (milestone notes, **not** a build order): 15 → 82 → 98 → 125 → **199**.
 
-**Token universe (verified live):** **488 tokens = 442 Ondo + 46 BStock**. xStocks are documented in the API but are **NOT listed live** — `rwa/search` for `AAPLx`/`NVDAx`/`TSLAx` returns code 40382 (not found). Never assume 1 token = 1 share: `tokenToShareRatio` ranges 0.066667–10 (228/488 are exactly 1).
+**Token universe (verified live):** **488 tokens = 442 Ondo + 46 BStock**. xStocks are documented in the API but are **NOT listed live** — `rwa/search` for `AAPLx`/`NVDAx`/`TSLAx` returns code 40382 (not found). Never assume 1 token = 1 share: `tokenToShareRatio` ranges ≈0.0667–10.03 (228/488 are exactly 1).
 
 ## 🧪 Testing
 
@@ -145,10 +145,10 @@ Test coverage includes:
 | MiMo subagent | executor (spread engine, modules) | Hermes `delegate_task` | `xiaomi-mimo/mimo-v2.6-pro` |
 
 **Factory design** (see [FACTORY.md](./FACTORY.md)):
-- coordinator-led decomposition; all handoffs through the coordinator
-- parallel builder/executor tracks, serialized before shared-store work
+- coordinator-led decomposition; all handoffs through the coordinator (operator-attested)
+- parallel builder/executor tracks, serialized before shared-store work (operator-attested)
 - every quantitative claim re-derived from a command or file before acceptance
-- a wrong diagnosis publicly retracted and corrected (the demo-trade root cause)
+- a wrong diagnosis retracted and corrected (the demo-trade root cause)
 
 ## 📡 API Reference
 
@@ -204,7 +204,7 @@ stockgap-agent/
 | [mandates/](./mandates/) | generic per-seat charters (kept project-agnostic on purpose) |
 | [DX-LOG.md](./DX-LOG.md) | full developer-experience log — source of truth for project history |
 
-**Deployment honesty:** everything runs on `localhost:8098` on the build machine — **no public URL**. The three demo-trade broadcasts all reverted on-chain (2-second in-calldata route deadline, not min-return — full receipts and root-cause chain in [RECOVERY.md](./RECOVERY.md)); no live b402 `binance` settlement was tested.
+**Deployment honesty:** everything runs on `localhost:8098` on the build machine — **no public URL**. The three demo-trade broadcasts all reverted on-chain (2-second in-calldata route deadline — proven by `eth_call` replay + calldata decode for `0x9ca3…` and `0x7c33…`; **INFERRED** for `0xfdc9…` (identical pattern, not replayed). Min-return was not the cause of the three broadcast reverts — a real simulate failure `Min return not reached` occurred at 1% slippage on the first demo attempt. Full receipts and root-cause chain in [RECOVERY.md](./RECOVERY.md)); no live b402 `binance` settlement was tested.
 
 ## 📜 License
 
