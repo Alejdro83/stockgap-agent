@@ -18,7 +18,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from . import mcp_server, telemetry
+from . import db, mcp_server, telemetry
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB = REPO_ROOT / "data" / "spread_ticks.db"
@@ -112,14 +112,19 @@ templates.env.filters["age"] = lambda ts: fmt_age(_age_s(ts))
 
 
 def with_db(fn):
-    """Open the DB read-only+immutable and run fn(conn, ...). Any failure -> DbError."""
+    """Open the DB read-only (mode=ro, NO immutable=1) and run fn(conn, ...).
+
+    immutable=1 would promise the file never changes and serve stale pages now
+    that the writers run WAL — the ro connection must see rows committed after
+    it opened. Any failure -> DbError.
+    """
 
     def wrapper(*args, **kwargs):
         path = get_db_path()
         if not path.exists():
             raise DbError(f"No se pudo leer la base de datos: {path.name} no existe.")
         try:
-            conn = sqlite3.connect(f"file:{path}?mode=ro&immutable=1", uri=True, timeout=5)
+            conn = db.connect_ro(path, timeout=5)
             conn.row_factory = sqlite3.Row
             try:
                 return fn(conn, *args, **kwargs)

@@ -39,6 +39,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
+from . import db  # noqa: E402 — shared WAL/busy_timeout connection factory
+
 __all__ = [
     "DbFeedbackWriter",
     "fetch_real_opens",
@@ -303,8 +305,8 @@ class ScoreOracle:
         clock: Optional[Any] = None,
     ):
         self.db_path = str(db_path)
-        self._con = sqlite3.connect(self.db_path)
-        self._con.execute("PRAGMA busy_timeout=10000")
+        self._con = db.connect(self.db_path)
+        db.ensure_wal(self._con)  # busy_timeout already set by db.connect
         self._con.executescript(SCHEMA)
         self._con.commit()
         self.feedback_writer = feedback_writer or DbFeedbackWriter(self._con)
@@ -600,7 +602,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if not actuals:
         parser.error("no real opens available — nothing to score")
 
-    con = sqlite3.connect(args.db)
+    con = db.connect(args.db)
+    db.ensure_wal(con)  # write path (oracle_reputation/oracle_feedback)
     cutoff_ts = args.cutoff_ts
     if cutoff_ts is None:
         row = con.execute("SELECT MAX(cutoff_ts) FROM oracle_predictions").fetchone()

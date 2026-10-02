@@ -17,7 +17,7 @@ DX-LOG/git basis).
 |---|---|---|---|
 | HMAC signer + client + fixtures (Day-0, git `075c3d0`) | `stockgap/signer.py`, `stockgap/client.py`, `scripts/fetch_fixtures.py`, `scripts/fetch_underlying_market.py`, `fixtures/` | `tests/test_signer.py` (15) | not recorded |
 | Spread engine (`spread_bps`, `spread_bps_real`) | `stockgap/spread.py` | `tests/test_spread.py` (30), `tests/test_spread_real.py` (24) | MiMo subagent |
-| Collector + watchdog | `stockgap/collector.py`, `scripts/run_collector.py`, `scripts/ensure_collector.sh` | `tests/test_collector.py` (9) | not recorded |
+| Collector + watchdog | `stockgap/collector.py`, `scripts/run_collector.py`, `scripts/ensure_collector.sh` | `tests/test_collector.py` (14) | not recorded |
 | Alerts + summary CLI | `stockgap/alerts.py`, `scripts/alerts.py`, `scripts/summary.py` | `tests/test_alerts.py` (28) | not recorded |
 | Weekend oracle + scoring | `stockgap/oracle.py`, `stockgap/oracle_score.py` | `tests/test_oracle.py` (27) | not recorded |
 | Executor pipeline (sign/simulate/broadcast, balance) | `stockgap/executor.py`, `stockgap/balance.py`, `scripts/demo_trade_flash.py`, `scripts/probe_quotes.py` | `tests/test_executor.py` (16) | not recorded |
@@ -25,9 +25,12 @@ DX-LOG/git basis).
 | MCP layer + pay gate | `stockgap/mcp_server.py`, `stockgap/b402_gate.py`, `config/mcp.env` | `tests/test_mcp.py` (14), `tests/test_b402.py` (23) | not recorded |
 | Coordination, plans, verification, DX-LOG upkeep | `DX-LOG.md` entries, plan/prompt files (outside repo) | — | L.I.S.A. (strategist) |
 
-Suite total: 15+28+23+9+13+16+14+27+30+24+3 = **202 passed** (measured:
+Suite total: 15+28+23+14+13+16+14+27+30+24+3+4+2 = **213 passed** (measured:
 `grep -c 'def test_' tests/*.py` + `python3 -m pytest -q`; the +3 is
-`tests/test_telemetry.py` — Sentry `SENTRY_DSN` toggle tests).
+`tests/test_telemetry.py` — Sentry `SENTRY_DSN` toggle tests; the +4/+2 are
+`tests/test_db.py` and `tests/test_oracle_reliability.py` — SQLite reliability
+fix, and test_collector grew 9 → 14 with the resilient tick-loop regression
+tests).
 
 ## 2. Starting tokens / budget
 

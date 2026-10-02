@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
+from . import db  # noqa: E402 — shared WAL/busy_timeout connection factory
 from .oracle import (  # noqa: E402 — shared reference cache + source labels
     DERIVED_REFERENCE_SOURCE,
     REFERENCE_SOURCE,
@@ -36,6 +37,13 @@ from .spread import cross_issuer_spreads, gross_spread, real_spread
 __all__ = ["SpreadCollector", "iso_now"]
 
 log = logging.getLogger("stockgap.collector")
+
+# Bounded retry for record_tick: the API data is already fetched, so a locked
+# DB costs nothing to retry (1-2 retries with a short sleep).
+RECORD_RETRY_DELAYS = (0.5, 1.5)
+# Exit non-zero after this many consecutive failed ticks so the watchdog
+# restarts a genuinely broken process instead of looping silently forever.
+MAX_CONSECUTIVE_FAILURES = 10
 
 # Single price source per metric: all price fields come from this endpoint.
 # tokenToShareRatio is a static token property sourced from
@@ -116,6 +124,7 @@ class SpreadCollector:
         universe_ttl_s: float = 600.0,
         reference_max_age_s: float = 1800.0,
         use_reference_cache: bool = True,
+        max_consecutive_failures: int = MAX_CONSECUTIVE_FAILURES,
     ):
         self.db_path = str(db_path)
         self.jsonl_path = Path(jsonl_path)
@@ -129,8 +138,11 @@ class SpreadCollector:
         # spread metric. Older/missing entries = cache-cold → labelled 'derived'.
         self.reference_max_age_s = reference_max_age_s
         self.use_reference_cache = use_reference_cache
+        self.max_consecutive_failures = int(max_consecutive_failures)
 
-        self._con = sqlite3.connect(self.db_path)
+        # WAL + busy_timeout(10s) via the shared factory; assert WAL engaged.
+        self._con = db.connect(self.db_path)
+        db.ensure_wal(self._con)
         self._con.executescript(SCHEMA)
         self._migrate()
         self._con.commit()
@@ -321,86 +333,108 @@ class SpreadCollector:
         self, ts_utc: str, tick_id: int,
         spread_rows: Sequence[Mapping[str, Any]], cross_rows: Sequence[Mapping[str, Any]],
     ) -> None:
-        """Write one tick to SQLite (committed) and append JSONL lines."""
-        self._con.executemany(
-            """INSERT INTO spread_ticks (
-                ts_utc, tick_id, underlying_ticker, token_symbol, token_contract,
-                platform_id, token_price, token_to_share_ratio, reference_price,
-                token_price_updated_at, implied_share_price, spread_abs, spread_bps,
-                spread_pct, market_status, open_state, spread_bps_real,
-                reference_close_independent, reference_source, reference_kind
-            ) VALUES (
-                :ts_utc, :tick_id, :underlying_ticker, :token_symbol, :token_contract,
-                :platform_id, :token_price, :token_to_share_ratio, :reference_price,
-                :token_price_updated_at, :implied_share_price, :spread_abs, :spread_bps,
-                :spread_pct, :market_status, :open_state, :spread_bps_real,
-                :reference_close_independent, :reference_source, :reference_kind
-            )""",
-            [
-                dict(
-                    r,
-                    ts_utc=ts_utc,
-                    spread_bps_real=r.get("spread_bps_real"),
-                    reference_close_independent=r.get("reference_close_independent"),
-                    reference_source=r.get("reference_source", DERIVED_REFERENCE_SOURCE),
-                    reference_kind=r.get("reference_kind", "derived"),
-                )
-                for r in spread_rows
-            ],
-        )
-        self._con.executemany(
-            """INSERT INTO cross_issuer_ticks (
-                ts_utc, tick_id, underlying_ticker, n_issuers, cheap_symbol,
-                cheap_platform, cheap_implied, rich_symbol, rich_platform,
-                rich_implied, spread_abs, spread_bps
-            ) VALUES (
-                :ts_utc, :tick_id, :underlying_ticker, :n_issuers, :cheap_symbol,
-                :cheap_platform, :cheap_implied, :rich_symbol, :rich_platform,
-                :rich_implied, :spread_abs, :spread_bps
-            )""",
-            [dict(r, ts_utc=ts_utc) for r in cross_rows],
-        )
-        self._con.commit()
+        """Write one tick in ONE short SQLite transaction, then the JSONL mirror.
 
-        with self.jsonl_path.open("a", encoding="utf-8") as fh:
-            for r in spread_rows:
-                fh.write(json.dumps({"type": "spread_tick", "ts_utc": ts_utc, **r},
-                                    ensure_ascii=False) + "\n")
-            for r in cross_rows:
-                fh.write(json.dumps({"type": "cross_issuer_tick", "ts_utc": ts_utc, **r},
-                                    ensure_ascii=False) + "\n")
+        The JSONL append is a non-fatal mirror (SQLite is the source of truth):
+        a failure there is logged at WARNING and does not fail the tick — so a
+        raised error from this method ALWAYS means the SQLite transaction
+        rolled back and the caller may safely reclaim the tick_id.
+        """
+        with db.write_txn(self._con) as con:
+            con.executemany(
+                """INSERT INTO spread_ticks (
+                    ts_utc, tick_id, underlying_ticker, token_symbol, token_contract,
+                    platform_id, token_price, token_to_share_ratio, reference_price,
+                    token_price_updated_at, implied_share_price, spread_abs, spread_bps,
+                    spread_pct, market_status, open_state, spread_bps_real,
+                    reference_close_independent, reference_source, reference_kind
+                ) VALUES (
+                    :ts_utc, :tick_id, :underlying_ticker, :token_symbol, :token_contract,
+                    :platform_id, :token_price, :token_to_share_ratio, :reference_price,
+                    :token_price_updated_at, :implied_share_price, :spread_abs, :spread_bps,
+                    :spread_pct, :market_status, :open_state, :spread_bps_real,
+                    :reference_close_independent, :reference_source, :reference_kind
+                )""",
+                [
+                    dict(
+                        r,
+                        ts_utc=ts_utc,
+                        spread_bps_real=r.get("spread_bps_real"),
+                        reference_close_independent=r.get("reference_close_independent"),
+                        reference_source=r.get("reference_source", DERIVED_REFERENCE_SOURCE),
+                        reference_kind=r.get("reference_kind", "derived"),
+                    )
+                    for r in spread_rows
+                ],
+            )
+            con.executemany(
+                """INSERT INTO cross_issuer_ticks (
+                    ts_utc, tick_id, underlying_ticker, n_issuers, cheap_symbol,
+                    cheap_platform, cheap_implied, rich_symbol, rich_platform,
+                    rich_implied, spread_abs, spread_bps
+                ) VALUES (
+                    :ts_utc, :tick_id, :underlying_ticker, :n_issuers, :cheap_symbol,
+                    :cheap_platform, :cheap_implied, :rich_symbol, :rich_platform,
+                    :rich_implied, :spread_abs, :spread_bps
+                )""",
+                [dict(r, ts_utc=ts_utc) for r in cross_rows],
+            )
+
+        try:
+            with self.jsonl_path.open("a", encoding="utf-8") as fh:
+                for r in spread_rows:
+                    fh.write(json.dumps({"type": "spread_tick", "ts_utc": ts_utc, **r},
+                                        ensure_ascii=False) + "\n")
+                for r in cross_rows:
+                    fh.write(json.dumps({"type": "cross_issuer_tick", "ts_utc": ts_utc, **r},
+                                        ensure_ascii=False) + "\n")
+        except OSError as exc:  # non-fatal mirror — SQLite already committed
+            log.warning("jsonl append failed for tick %s (SQLite committed): %s",
+                        tick_id, exc)
 
     # ---------------- loop ----------------
 
     def run_once(self) -> dict:
-        """One full tick: universe → batched prices → spreads → storage."""
+        """One full tick: universe → batched prices → spreads → storage.
+
+        tick_id policy: the id is allocated BEFORE the write and RECLAIMED
+        (decremented) when the tick fails to persist — ``record_tick`` is
+        atomic (one SQLite transaction; its JSONL mirror is non-fatal), so a
+        failure means nothing was committed and the id is safe to reuse.
+        tick_ids therefore stay contiguous across failed ticks and restarts.
+        """
         ts = iso_now()
         self._tick_id += 1
         tick_id = self._tick_id
-        universe = self.load_universe()
-        contracts = [
-            str(u["tokenContractAddress"])
-            for u in universe
-            if u.get("tokenContractAddress")
-        ]
-        price_rows = self.fetch_price_rows(contracts)
-        # REAL metric: independent per-share closes from the shared
-        # oracle_reference cache (populated by stockgap/oracle.py). Cache-cold
-        # tickers fall back to the derived reference, honestly labelled.
-        reference: dict = {}
-        if self.use_reference_cache:
-            try:
-                reference = load_reference_closes(
-                    self._con, max_age_s=self.reference_max_age_s
-                )
-            except Exception as exc:  # noqa: BLE001 — never kill the tick
-                log.warning("reference cache read failed: %s", exc)
-                reference = {}
-        spreads, cross = self.build_tick_rows(
-            universe, price_rows, tick_id, reference_by_ticker=reference
-        )
-        self.record_tick(ts, tick_id, spreads, cross)
-        self._meta_set("last_tick_ts", ts)
+        try:
+            universe = self.load_universe()
+            contracts = [
+                str(u["tokenContractAddress"])
+                for u in universe
+                if u.get("tokenContractAddress")
+            ]
+            price_rows = self.fetch_price_rows(contracts)
+            # REAL metric: independent per-share closes from the shared
+            # oracle_reference cache (populated by stockgap/oracle.py). Cache-cold
+            # tickers fall back to the derived reference, honestly labelled.
+            reference: dict = {}
+            if self.use_reference_cache:
+                try:
+                    reference = load_reference_closes(
+                        self._con, max_age_s=self.reference_max_age_s
+                    )
+                except Exception as exc:  # noqa: BLE001 — never kill the tick
+                    log.warning("reference cache read failed: %s", exc)
+                    reference = {}
+            spreads, cross = self.build_tick_rows(
+                universe, price_rows, tick_id, reference_by_ticker=reference
+            )
+            self._record_tick_with_retry(ts, tick_id, spreads, cross)
+        except Exception:
+            # Nothing for tick_id was committed (see docstring) — reclaim it.
+            self._tick_id -= 1
+            raise
+        self._meta_set("last_tick_ts", ts)  # guarded bookkeeping: never fails the tick
         meta = {
             "tick_id": tick_id, "ts_utc": ts,
             "n_spreads": len(spreads), "n_cross": len(cross),
@@ -412,18 +446,83 @@ class SpreadCollector:
         log.info("tick %s: %d spreads, %d cross-issuer", tick_id, len(spreads), len(cross))
         return meta
 
-    def run_forever(self) -> None:
-        """Tick every ``tick_interval`` seconds; never die on a bad tick."""
+    def _record_tick_with_retry(
+        self, ts: str, tick_id: int,
+        spread_rows: Sequence[Mapping[str, Any]], cross_rows: Sequence[Mapping[str, Any]],
+    ) -> None:
+        """record_tick with bounded retry (the API data is already in memory).
+
+        Each failed attempt rolls back before sleeping so no half-open write
+        transaction survives into the retry. Re-raises the last error when all
+        attempts are exhausted.
+        """
+        last_exc: Optional[Exception] = None
+        attempts = 1 + len(RECORD_RETRY_DELAYS)
+        for attempt in range(attempts):
+            try:
+                self.record_tick(ts, tick_id, spread_rows, cross_rows)
+                return
+            except Exception as exc:  # noqa: BLE001 — retry any storage error
+                last_exc = exc
+                log.warning(
+                    "record_tick %s attempt %d/%d failed: %s",
+                    tick_id, attempt + 1, attempts, exc,
+                )
+                try:
+                    self._con.rollback()  # drop the failed batch's transaction
+                except Exception as exc2:  # noqa: BLE001
+                    log.warning("rollback after failed tick %s: %s", tick_id, exc2)
+                if attempt < len(RECORD_RETRY_DELAYS):
+                    time.sleep(RECORD_RETRY_DELAYS[attempt])
+        assert last_exc is not None
+        raise last_exc
+
+    def run_forever(self, max_ticks: Optional[int] = None) -> None:
+        """Tick every ``tick_interval`` seconds; never die on a bad tick.
+
+        Resilience contract (regression fix for the 176x 'database is locked'
+        daemon deaths):
+
+        - a failed tick is logged + rolled back and NEVER kills the loop;
+        - the failure bookkeeping (``_meta_set``) is guarded — its own
+          'database is locked' used to escape and kill the daemon;
+        - after ``max_consecutive_failures`` consecutive failed ticks the
+          process EXITS NON-ZERO so the watchdog restarts a genuinely broken
+          process instead of looping silently forever.
+
+        ``max_ticks`` bounds the loop (tests); None = run forever.
+        """
         self._meta_set("started_at", iso_now())
         log.info("collector started: interval=%ss db=%s jsonl=%s",
                  self.tick_interval, self.db_path, self.jsonl_path)
+        consecutive = 0
+        ticks = 0
         while True:
             started = time.time()
+            ok = True
             try:
                 self.run_once()
             except Exception as exc:  # noqa: BLE001 — 24/7 survival
+                ok = False
                 log.exception("tick failed: %s", exc)
-                self._meta_set("last_error", f"{iso_now()}: {exc}")
+                try:
+                    self._con.rollback()  # no half-open txn survives into the next tick
+                except Exception as exc2:  # noqa: BLE001
+                    log.warning("rollback after failed tick: %s", exc2)
+                self._meta_set("last_error", f"{iso_now()}: {exc}")  # guarded, never escapes
+            if ok:
+                consecutive = 0
+            else:
+                consecutive += 1
+                if consecutive >= self.max_consecutive_failures:
+                    log.error(
+                        "%d consecutive failed ticks — exiting non-zero so the "
+                        "watchdog restarts a healthy process", consecutive,
+                    )
+                    raise SystemExit(2)
+            ticks += 1
+            if max_ticks is not None and ticks >= max_ticks:
+                return
             elapsed = time.time() - started
             time.sleep(max(1.0, self.tick_interval - elapsed))
 
@@ -456,10 +555,24 @@ class SpreadCollector:
             (DERIVED_REFERENCE_SOURCE,),
         )
 
-    def _meta_set(self, key: str, value: str) -> None:
-        self._con.execute(
-            "INSERT INTO collector_meta (key, value) VALUES (?, ?) "
-            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-            (key, value),
-        )
-        self._con.commit()
+    def _meta_set(self, key: str, value: Any) -> None:
+        """Collector_meta bookkeeping: GUARDED, never raises.
+
+        This handler used to be the daemon killer: when the DB was locked its
+        own 'database is locked' escaped the tick-failure handler and took the
+        process down (root cause #1 of the 176x lock outage). It now rolls
+        back and logs at WARNING.
+        """
+        try:
+            self._con.execute(
+                "INSERT INTO collector_meta (key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (key, str(value)),
+            )
+            self._con.commit()
+        except Exception as exc:  # noqa: BLE001 — bookkeeping must never kill the loop
+            log.warning("meta_set(%s) failed (ignored): %s", key, exc)
+            try:
+                self._con.rollback()
+            except Exception:  # noqa: BLE001
+                pass

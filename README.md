@@ -70,7 +70,7 @@ cd stockgap-agent
 
 # Verify (no Docker — runs directly on Python 3; no Docker build is part of this track)
 python3 -m pytest -q
-# 202 passed in 5.79s
+# 213 passed in 4.03s
 
 # Start the dashboard (local only — no public URL)
 nohup python3 scripts/dashboard.py >> data/dashboard.log 2>&1 &
@@ -107,17 +107,19 @@ Per-module test counts (measured: `grep -c 'def test_' tests/*.py`; no build-ord
 | test_signer | 15 | HMAC-SHA256 signing, OpenSSL cross-check vector |
 | test_alerts | 28 | crossings, rate limiting, ratio≠1 formatting, actionability |
 | test_b402 | 23 | pay gate: local receipt verify + mock `binance` settlement |
-| test_collector | 9 | batched collection, provenance columns |
+| test_collector | 14 | batched collection, provenance columns, resilient tick loop |
 | test_dashboard | 13 | read-only dashboard + fragments |
+| test_db | 4 | WAL/busy_timeout factory, `ensure_wal` assertion, ro fresh-read |
 | test_executor | 16 | tx sanitization, chain/router refusals, simulate gate |
 | test_mcp | 14 | JSON-RPC tools, free/dispatch, idempotent paid calls |
 | test_oracle | 27 | per-share close normalization, fallbacks, cache TTL |
+| test_oracle_reliability | 2 | fetch-first reference refresh (no txn during fetch), chunked write holds |
 | test_spread | 30 | spread engine, cross-issuer |
 | test_spread_real | 24 | ratio normalization, NFLX regression, derived-vs-real |
 | test_telemetry | 3 | Sentry `SENTRY_DSN` toggle: no-DSN no-op, DSN init (mocked), app boots |
-| **Total** | **202** | **all passing** |
+| **Total** | **213** | **all passing** |
 
-Recorded suite-size checkpoints in DX-LOG (milestone notes, **not** a build order): 15 → 82 → 98 → 125 → 199 → **202**.
+Recorded suite-size checkpoints in DX-LOG (milestone notes, **not** a build order): 15 → 82 → 98 → 125 → 199 → 202 → **213**.
 
 **Token universe (verified live):** **488 tokens = 442 Ondo + 46 BStock**. xStocks are documented in the API but are **NOT listed live** — `rwa/search` for `AAPLx`/`NVDAx`/`TSLAx` returns code 40382 (not found). Never assume 1 token = 1 share: `tokenToShareRatio` ranges ≈0.0667–10.03 (228/488 are exactly 1).
 
@@ -125,7 +127,7 @@ Recorded suite-size checkpoints in DX-LOG (milestone notes, **not** a build orde
 
 ```bash
 python3 -m pytest -q
-# 202 passed in 5.79s
+# 213 passed in 4.03s
 ```
 
 Test coverage includes:
@@ -193,7 +195,7 @@ stockgap-agent/
 ├── stockgap/          # signer, client, collector, spread, alerts, oracle, executor,
 │   │                  #   balance, dashboard, mcp_server, b402_gate, telemetry (+ templates/)
 ├── scripts/           # run_collector, alerts, summary, dashboard launcher, demo driver, fixtures fetchers
-├── tests/             # 11 test modules, 202 tests
+├── tests/             # 13 test modules, 213 tests
 ├── config/            # alerts.env, mcp.env, oracle.env (no live secrets inside)
 ├── fixtures/          # real OCResult<T> envelopes + MANIFEST.json
 ├── data/              # SQLite + logs (not committed, ~400 MB)

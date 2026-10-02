@@ -34,6 +34,7 @@ from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from stockgap import db  # noqa: E402 — shared WAL/busy_timeout connection factory
 from stockgap.alerts import (  # noqa: E402
     AlertConfig,
     AlertEvent,
@@ -50,6 +51,15 @@ REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "data"
 DATA.mkdir(exist_ok=True)
 DB_PATH = os.environ.get("STOCKGAP_DB", str(DATA / "spread_ticks.db"))
+
+
+def _open_db() -> sqlite3.Connection:
+    """Writer connection for the alert scanner: WAL + busy_timeout via the
+    shared factory. ensure_wal() runs once per process startup (cron = per run)
+    and ASSERTS the WAL conversion actually happened (stockgap/db.py)."""
+    con = db.connect(DB_PATH, timeout=30.0)
+    db.ensure_wal(con)
+    return con
 
 logging.basicConfig(
     level=logging.INFO,
@@ -84,12 +94,16 @@ class AlertState:
         return row[0] if row else default
 
     def set(self, key: str, value: str) -> None:
-        self.con.execute(
-            "INSERT INTO alert_state (key, value) VALUES (?, ?) "
-            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-            (key, value),
-        )
-        self.con.commit()
+        # Short write transaction (BEGIN IMMEDIATE ... COMMIT): under WAL a
+        # read-then-write batch can fail with SQLITE_BUSY_SNAPSHOT, which
+        # IGNORES busy_timeout — taking the write lock up front avoids it and
+        # keeps each hold to milliseconds.
+        with db.write_txn(self.con) as con:
+            con.execute(
+                "INSERT INTO alert_state (key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (key, value),
+            )
 
     def get_json(self, key: str) -> Dict[str, Any]:
         raw = self.get(key)
@@ -270,7 +284,7 @@ def flush_digest(cfg: AlertConfig, state: AlertState, transport: Any) -> int:
 
 
 def scan_once(cfg: AlertConfig, dry_run: bool = False) -> int:
-    con = sqlite3.connect(DB_PATH, timeout=30)
+    con = _open_db()
     try:
         state = AlertState(con)
         _bootstrap_watermarks(con, state, cfg.alert_metric)
@@ -325,7 +339,7 @@ def main() -> int:
         return 0 if send_test(cfg) else 1
 
     if args.flush_digest:
-        con = sqlite3.connect(DB_PATH, timeout=30)
+        con = _open_db()
         try:
             return 0 if flush_digest(cfg, AlertState(con), build_transport(cfg)) else 1
         finally:

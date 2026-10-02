@@ -62,7 +62,7 @@ outside the submitted repo tree; they are cited, not copied.
 ## 3. Verification strategy
 
 - **pytest gate** — full suite must pass before any claim: `python3 -m pytest -q` →
-  **202 passed** (measured, this session; `data/pytest_status.json` last write:
+  **213 passed** (measured, this session; `data/pytest_status.json` last write:
   199/0 at 2026-10-02T02:43:26Z).
 - **Live demo checks** — `curl http://localhost:8098/` → **200** and
   `curl -X POST http://localhost:8098/mcp` `tools/list` → the three tools
@@ -148,7 +148,7 @@ and the recorded live-check window; no PIDs, no unsourced wall-times):
 | `stockgap/mcp_server.py` mtime | 2026-10-02 02:26:10 UTC | `stat` (measured) |
 | `stockgap/b402_gate.py` mtime | 2026-10-02 02:25:48 UTC | `stat` (measured) |
 | Live metric verification window | 02:37–02:40 UTC, 2026-10-02 (market open) | DX-LOG (doc) |
-| Full suite run (latest, post-Sentry-wiring) | 202 passed in 5.79s | `python3 -m pytest -q` (measured) |
+| Full suite run (latest, post-SQLite-reliability-fix) | 213 passed in 4.03s | `python3 -m pytest -q` (measured) |
 
 - Token / LLM usage per seat: **not tracked (no per-seat metering during the run)**.
 - USD cost per seat: **not tracked** — no metering was enabled and nothing was

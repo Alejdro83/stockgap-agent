@@ -45,6 +45,7 @@ if __package__ in (None, ""):  # direct run: python3 stockgap/oracle.py
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     __package__ = "stockgap"
 
+from . import db  # noqa: E402 — shared WAL/busy_timeout connection factory
 from .spread import implied_share_price, independent_share_close  # noqa: E402
 
 __all__ = [
@@ -67,6 +68,9 @@ UNDERLYING_ENDPOINT = "/api/v1/dex/market/rwa/underlying-market"
 REFERENCE_SOURCE = "rwa/underlying-market"
 DERIVED_REFERENCE_SOURCE = PRICE_ENDPOINT + " (derived)"
 BPS = Decimal("10000")
+# Chunk size for oracle_predictions writes: each chunk commits in its own
+# short BEGIN IMMEDIATE transaction (hold time stays in milliseconds).
+WRITE_BATCH_ROWS = 3000
 
 REPO = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG_FILE = REPO / "config" / "oracle.env"
@@ -372,8 +376,8 @@ class OraclePredictor:
         self.cutoff_hour = int(self.config["ORACLE_CUTOFF_HOUR"])
         self.cutoff_minute = int(self.config["ORACLE_CUTOFF_MINUTE"])
 
-        self._con = sqlite3.connect(self.db_path)
-        self._con.execute("PRAGMA busy_timeout=10000")
+        self._con = db.connect(self.db_path)
+        db.ensure_wal(self._con)  # busy_timeout is already set by db.connect
         self._con.executescript(SCHEMA)  # CREATE ... IF NOT EXISTS: idempotent
         self._migrate()
         self._con.commit()
@@ -423,13 +427,18 @@ class OraclePredictor:
             key=lambda t: cached[t][1] if t in cached else 0.0,  # never-fetched first
         )
         fetched_at = datetime.fromtimestamp(now_epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        # PHASE 1 — ALL network fetches into memory first. NO SQLite transaction
+        # is open during a fetch (root cause #2: this used to hold the write
+        # transaction across up to ~150 unbounded network calls, blocking every
+        # other writer for the whole fetch window).
+        updates: dict = {}  # ticker -> (value, now_epoch, fetched_at)
         for n, ticker in enumerate(stale[: self.ref_max_per_tick]):
             if n and self.ref_stagger_s:
                 time.sleep(self.ref_stagger_s)
             value = None
             for contract in contracts_by_ticker[ticker]:
                 try:
-                    value = self.fetcher.fetch_underlying_reference(contract)
+                    value = self.fetcher.fetch_underlying_reference(contract)  # NETWORK
                 except Exception as exc:  # noqa: BLE001 — one bad call must not kill the tick
                     log.warning("underlying-market %s failed: %s", contract, exc)
                     value = None
@@ -441,17 +450,29 @@ class OraclePredictor:
                         continue
                     break
             if value:
-                self._con.execute(
+                updates[ticker] = (str(value), now_epoch, fetched_at)
+
+        # PHASE 2 — ONE short write transaction (~25 tiny upserts, milliseconds),
+        # BEGIN IMMEDIATE so the batch can't hit SQLITE_BUSY_SNAPSHOT on commit.
+        if updates:
+            t0 = time.monotonic()
+            with db.write_txn(self._con) as con:
+                con.executemany(
                     "INSERT INTO oracle_reference (underlying_ticker, reference_close,"
                     " source_endpoint, fetched_epoch, fetched_at) VALUES (?, ?, ?, ?, ?)"
                     " ON CONFLICT(underlying_ticker) DO UPDATE SET"
                     " reference_close=excluded.reference_close,"
                     " source_endpoint=excluded.source_endpoint,"
                     " fetched_epoch=excluded.fetched_epoch, fetched_at=excluded.fetched_at",
-                    (ticker, str(value), UNDERLYING_ENDPOINT, now_epoch, fetched_at),
+                    [
+                        (ticker, value, UNDERLYING_ENDPOINT, epoch, at)
+                        for ticker, (value, epoch, at) in updates.items()
+                    ],
                 )
-                cached[ticker] = (str(value), now_epoch)
-        self._con.commit()
+            log.info("oracle_reference write txn held %.3fs (%d upserts)",
+                     time.monotonic() - t0, len(updates))
+            for ticker, (value, epoch, _at) in updates.items():
+                cached[ticker] = (value, epoch)
         return {t: v[0] for t, v in cached.items() if t in contracts_by_ticker}
 
     # ---------------- one snapshot ----------------
@@ -486,8 +507,20 @@ class OraclePredictor:
             reference_by_ticker=reference,
         )
         if rows:
-            self._con.executemany(self.INSERT_SQL, rows)
-            self._con.commit()
+            # Chunked short transactions (BEGIN IMMEDIATE ... COMMIT per batch):
+            # the whole executemany used to hold one write lock for the full
+            # 97k-row table's insert batch. Batches of a few thousand rows keep
+            # each hold at milliseconds; the timing below must stay << 1s.
+            t0 = time.monotonic()
+            for i in range(0, len(rows), WRITE_BATCH_ROWS):
+                chunk = rows[i : i + WRITE_BATCH_ROWS]
+                batch_t0 = time.monotonic()
+                with db.write_txn(self._con) as con:
+                    con.executemany(self.INSERT_SQL, chunk)
+                log.info("oracle_predictions write txn held %.3fs (%d rows)",
+                         time.monotonic() - batch_t0, len(chunk))
+            log.info("oracle_predictions total write hold %.3fs (%d rows, batches of %d)",
+                     time.monotonic() - t0, len(rows), WRITE_BATCH_ROWS)
         log.info(
             "oracle snapshot #%d ts=%s cutoff=%s rows=%d/%d priced",
             self._snapshot_id, snapshot_ts, cutoff_ts, len(rows), len(universe),

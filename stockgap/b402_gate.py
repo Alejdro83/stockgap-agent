@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional
 
+from . import db  # shared WAL/busy_timeout connection factory
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG = REPO_ROOT / "config" / "mcp.env"
 DEFAULT_MERCHANT = "0x069Ac6d8cf3553416fE5a4f0410ebEb758A8F819"
@@ -167,11 +169,14 @@ class PaidCalls:
     def __init__(self, db_path: str):
         self.db_path = db_path
         with self._conn() as c:
+            db.ensure_wal(c)  # once at startup, asserted (stockgap/db.py)
             c.execute("CREATE TABLE IF NOT EXISTS paid_calls (tx_hash TEXT PRIMARY KEY, payer TEXT, "
                       "amount TEXT, tool TEXT, provider TEXT, paid_at TEXT)")
 
     def _conn(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.db_path, timeout=10)
+        # WAL + busy_timeout(10s) via the shared factory — paid_calls writes
+        # (claim/release) must not 'database is locked' on the tick DB.
+        return db.connect(self.db_path, timeout=10.0)
 
     @staticmethod
     def _key(proof_id: str) -> str:

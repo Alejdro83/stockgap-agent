@@ -9,7 +9,9 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from stockgap import collector as collector_mod
 from stockgap.collector import SpreadCollector
 
 UNIVERSE = [
@@ -151,6 +153,134 @@ class TestStorageRoundTrip(unittest.TestCase):
         m1 = self.collector.run_once()
         m2 = self.collector.run_once()
         self.assertEqual(m2["tick_id"], m1["tick_id"] + 1)
+
+
+class TestTickLoopResilience(unittest.TestCase):
+    """REGRESSION: a temporarily locked DB must never kill the 24/7 daemon.
+
+    Before the fix the collector died on every 'database is locked' (176 in
+    data/collector.log; watchdog restarted it 90x in 18h) — the tick-failure
+    handler's own ``_meta_set`` raised too and escaped the loop. On today's
+    (pre-fix) code every test here fails: that is the point.
+    """
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.db = self.tmp / "ticks.db"
+        self.jsonl = self.tmp / "ticks.jsonl"
+
+    def _collector(self, client=None):
+        # Shrink the lock-wait budget so locked scenarios fail in ms, not 10s.
+        with mock.patch("stockgap.db.DEFAULT_BUSY_TIMEOUT_MS", 25):
+            return SpreadCollector(
+                db_path=str(self.db), jsonl_path=self.jsonl,
+                client=client or FakeClient(), tick_interval=1.0,
+            )
+
+    def _hold_write_lock(self):
+        lock = sqlite3.connect(str(self.db))
+        lock.execute("BEGIN IMMEDIATE")
+        lock.execute("INSERT INTO collector_meta VALUES ('lock', '1')")
+        return lock
+
+    def test_locked_db_survives_failed_tick_then_next_tick_succeeds(self):
+        holder = {"lock": None}
+
+        class ReleasingClient(FakeClient):
+            """Releases the competing lock at the START of tick 2's write window
+            (tick 2's price fetch — the universe is cached across ticks)."""
+
+            price_calls = 0
+
+            def request(self, method, path, params=None):
+                if path == collector_mod.PRICE_ENDPOINT:
+                    ReleasingClient.price_calls += 1
+                    if ReleasingClient.price_calls == 2 and holder["lock"] is not None:
+                        holder["lock"].execute("ROLLBACK")  # lock free again for tick 2
+                return FakeClient.request(self, method, path, params)
+
+        collector = self._collector(client=ReleasingClient())  # creates the schema
+        holder["lock"] = self._hold_write_lock()
+        with mock.patch("stockgap.collector.time.sleep"):  # no real waiting
+            collector.run_forever(max_ticks=2)  # must SURVIVE, not raise
+
+        # tick 2 ran after the release
+        self.assertEqual(ReleasingClient.price_calls, 2)
+        con = sqlite3.connect(str(self.db))
+        # failed tick fully rolled back (exactly one tick's rows persisted) ...
+        self.assertEqual(
+            (con.execute("SELECT COUNT(*) FROM spread_ticks").fetchone()[0],
+             con.execute("SELECT COUNT(*) FROM cross_issuer_ticks").fetchone()[0]),
+            (3, 1),
+        )
+        # ... and its tick_id was reclaimed: tick_ids stay contiguous
+        self.assertEqual(
+            [r[0] for r in con.execute("SELECT DISTINCT tick_id FROM spread_ticks")],
+            [1],
+        )
+        con.close()
+
+    def test_meta_set_never_raises_when_locked(self):
+        collector = self._collector()
+        lock = self._hold_write_lock()
+        try:
+            collector._meta_set("probe", "1")  # must swallow the lock error
+            self.assertFalse(collector._con.in_transaction)  # rolled back
+        finally:
+            lock.execute("ROLLBACK")
+            lock.close()
+
+    def test_bounded_retry_on_record_tick(self):
+        collector = self._collector()
+        orig = collector.record_tick
+        state = {"calls": 0}
+
+        def locked_twice(ts, tick_id, spreads, cross):
+            state["calls"] += 1
+            if state["calls"] <= len(collector_mod.RECORD_RETRY_DELAYS):
+                raise sqlite3.OperationalError("database is locked")
+            return orig(ts, tick_id, spreads, cross)
+
+        collector.record_tick = locked_twice
+        with mock.patch("stockgap.collector.time.sleep"):  # short sleeps, fast test
+            meta = collector.run_once()
+        self.assertEqual(meta["tick_id"], 1)  # same tick, no id burned by retries
+        # 2 retries (RECORD_RETRY_DELAYS), then success — never unbounded
+        self.assertEqual(state["calls"], len(collector_mod.RECORD_RETRY_DELAYS) + 1)
+
+    def test_failed_tick_reclaims_tick_id(self):
+        collector = self._collector()
+        orig = collector.record_tick
+        state = {"calls": 0}
+
+        def always_locked(*args, **kwargs):
+            state["calls"] += 1
+            raise sqlite3.OperationalError("database is locked")
+
+        collector.record_tick = always_locked
+        with mock.patch("stockgap.collector.time.sleep"):
+            with self.assertRaises(sqlite3.OperationalError):
+                collector.run_once()
+        self.assertEqual(state["calls"], len(collector_mod.RECORD_RETRY_DELAYS) + 1)
+        self.assertFalse(collector._con.in_transaction)  # failed tick rolled back
+        self.assertEqual(collector._tick_id, 0)  # documented policy: id reclaimed
+
+        collector.record_tick = orig  # lock gone: next tick must reuse the id
+        meta = collector.run_once()
+        self.assertEqual(meta["tick_id"], 1)
+
+    def test_exits_nonzero_after_max_consecutive_failures(self):
+        collector = self._collector()
+        collector.max_consecutive_failures = 3
+
+        def boom():
+            raise RuntimeError("api down")
+
+        collector.run_once = boom
+        with mock.patch("stockgap.collector.time.sleep"):
+            with self.assertRaises(SystemExit) as cm:
+                collector.run_forever(max_ticks=10)
+        self.assertNotEqual(cm.exception.code, 0)  # watchdog sees a real failure
 
 
 if __name__ == "__main__":
