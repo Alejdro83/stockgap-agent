@@ -32,6 +32,7 @@ Built on BSC mainnet (chain 56) against the Binance Web3 API (OC gateway): an HM
 | **Simulate-gated executor** | aborts before sign/broadcast unless a fresh simulate returns SUCCESS; refuses wrong router/chain |
 | **MCP pay-per-call** | JSON-RPC 2.0 tools over `POST /mcp`; `initialize`/`tools/list` always free; b402 gate (`local_receipt` or `binance`) with idempotent paid calls |
 | **Ops watchdogs** | collector watchdog (cron `*/5`) + stateless alert scans + `flock`-guarded oracle refresh |
+| **Sentry observability** | optional error tracking in dashboard + collector, toggle via `SENTRY_DSN` — clean no-op without one |
 
 ## 🏗️ Architecture
 
@@ -69,7 +70,7 @@ cd stockgap-agent
 
 # Verify (no Docker — runs directly on Python 3; no Docker build is part of this track)
 python3 -m pytest -q
-# 199 passed in 5.73s
+# 202 passed in 5.79s
 
 # Start the dashboard (local only — no public URL)
 nohup python3 scripts/dashboard.py >> data/dashboard.log 2>&1 &
@@ -113,9 +114,10 @@ Per-module test counts (measured: `grep -c 'def test_' tests/*.py`; no build-ord
 | test_oracle | 27 | per-share close normalization, fallbacks, cache TTL |
 | test_spread | 30 | spread engine, cross-issuer |
 | test_spread_real | 24 | ratio normalization, NFLX regression, derived-vs-real |
-| **Total** | **199** | **all passing** |
+| test_telemetry | 3 | Sentry `SENTRY_DSN` toggle: no-DSN no-op, DSN init (mocked), app boots |
+| **Total** | **202** | **all passing** |
 
-Recorded suite-size checkpoints in DX-LOG (milestone notes, **not** a build order): 15 → 82 → 98 → 125 → **199**.
+Recorded suite-size checkpoints in DX-LOG (milestone notes, **not** a build order): 15 → 82 → 98 → 125 → 199 → **202**.
 
 **Token universe (verified live):** **488 tokens = 442 Ondo + 46 BStock**. xStocks are documented in the API but are **NOT listed live** — `rwa/search` for `AAPLx`/`NVDAx`/`TSLAx` returns code 40382 (not found). Never assume 1 token = 1 share: `tokenToShareRatio` ranges ≈0.0667–10.03 (228/488 are exactly 1).
 
@@ -123,7 +125,7 @@ Recorded suite-size checkpoints in DX-LOG (milestone notes, **not** a build orde
 
 ```bash
 python3 -m pytest -q
-# 199 passed in 5.73s
+# 202 passed in 5.79s
 ```
 
 Test coverage includes:
@@ -133,6 +135,16 @@ Test coverage includes:
 - executor tx sanitization (nonce injection, chainId 56, checksums) and refusals (wrong router / wrong chain)
 - simulate-before-broadcast abort path
 - MCP JSON-RPC tools and b402 gate (local receipts + mocked `binance` adapter — no live merchant settlement tested)
+- the Sentry `SENTRY_DSN` toggle (no-DSN no-op, init with DSN mocked, dashboard boots)
+
+## 🛰️ Observability (Optional)
+
+Sentry error tracking is wired into the dashboard entrypoint (`scripts/dashboard.py` + `stockgap/dashboard.py`, FastAPI integration) and the collector entrypoint (`scripts/run_collector.py`). The toggle is `SENTRY_DSN` (stockgap/telemetry.py):
+
+- **unset** (the current deployment) → clean no-op with one log line (`Sentry disabled (no SENTRY_DSN)`).
+- **set** (env var wins; a `SENTRY_DSN=` line in `config/sentry.env` is the fallback) → `sentry-sdk` initializes at startup tagged `service=stockgap-dashboard|stockgap-collector`; optional `SENTRY_TRACES_SAMPLE_RATE` (default `0.0`).
+
+No DSN is stored in the repo and none is hardcoded; any init failure degrades to the same no-op — observability can never take the app down. Takes effect at the next start of the affected process.
 
 ## 🏭 Factory
 
@@ -179,9 +191,9 @@ Pay gate (`stockgap/b402_gate.py`, `config/mcp.env`): `MCP_PAY_MODE=free|b402` (
 ```
 stockgap-agent/
 ├── stockgap/          # signer, client, collector, spread, alerts, oracle, executor,
-│   │                  #   balance, dashboard, mcp_server, b402_gate (+ templates/)
+│   │                  #   balance, dashboard, mcp_server, b402_gate, telemetry (+ templates/)
 ├── scripts/           # run_collector, alerts, summary, dashboard launcher, demo driver, fixtures fetchers
-├── tests/             # 10 test modules, 199 tests
+├── tests/             # 11 test modules, 202 tests
 ├── config/            # alerts.env, mcp.env, oracle.env (no live secrets inside)
 ├── fixtures/          # real OCResult<T> envelopes + MANIFEST.json
 ├── data/              # SQLite + logs (not committed, ~400 MB)

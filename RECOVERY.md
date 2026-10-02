@@ -25,8 +25,9 @@ DX-LOG/git basis).
 | MCP layer + pay gate | `stockgap/mcp_server.py`, `stockgap/b402_gate.py`, `config/mcp.env` | `tests/test_mcp.py` (14), `tests/test_b402.py` (23) | not recorded |
 | Coordination, plans, verification, DX-LOG upkeep | `DX-LOG.md` entries, plan/prompt files (outside repo) | — | L.I.S.A. (strategist) |
 
-Suite total: 15+28+23+9+13+16+14+27+30+24 = **199 passed** (measured:
-`grep -c 'def test_' tests/*.py` + `python3 -m pytest -q`).
+Suite total: 15+28+23+9+13+16+14+27+30+24+3 = **202 passed** (measured:
+`grep -c 'def test_' tests/*.py` + `python3 -m pytest -q`; the +3 is
+`tests/test_telemetry.py` — Sentry `SENTRY_DSN` toggle tests).
 
 ## 2. Starting tokens / budget
 

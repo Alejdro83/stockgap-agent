@@ -18,7 +18,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from . import mcp_server
+from . import mcp_server, telemetry
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB = REPO_ROOT / "data" / "spread_ticks.db"
@@ -43,6 +43,10 @@ ALERT_KEYS = [
     "ALERT_SCAN_INTERVAL", "ALERT_DIGEST_MODE", "ALERTS_ENABLED",
     "ALERT_SPREAD_ENABLED", "ALERT_CROSS_ENABLED", "TELEGRAM_ALERTS", "ALERT_FILE_LOG",
 ]
+
+# Sentry (optional, SENTRY_DSN toggle): initialized BEFORE app creation so the
+# FastAPI/Starlette integration can patch the framework. Clean no-op without a DSN.
+telemetry.init_sentry("stockgap-dashboard", fastapi=True)
 
 app = FastAPI(title="StockGap Dashboard")
 app.include_router(mcp_server.router)  # POST /mcp (MCP + pay-per-call gate)

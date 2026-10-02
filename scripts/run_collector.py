@@ -3,6 +3,7 @@
 
 Usage: python3 scripts/run_collector.py
 Env:   TICK_INTERVAL (seconds, default 30), STOCKGAP_DB, STOCKGAP_JSONL
+       SENTRY_DSN (optional Sentry crash reporting; no-op when unset)
 Runs forever; safe under nohup/setsid. SIGTERM/SIGINT exit cleanly.
 """
 
@@ -18,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from stockgap.client import BinanceWeb3Client, load_credentials  # noqa: E402
 from stockgap.collector import SpreadCollector  # noqa: E402
+from stockgap import telemetry  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "data"
@@ -39,6 +41,7 @@ log = logging.getLogger("stockgap.runner")
 
 
 def main() -> int:
+    telemetry.init_sentry("stockgap-collector")  # SENTRY_DSN toggle; no-op when unset
     api_key, secret, _, _ = load_credentials()
     client = BinanceWeb3Client(api_key, secret)
     collector = SpreadCollector(
