@@ -8,8 +8,10 @@ Domain facts under test (verified live, see DX-LOG.md):
   rejects off-hours orders with 40367/40369).
 """
 
+import tempfile
 import unittest
 from decimal import Decimal
+from pathlib import Path
 
 from stockgap.alerts import (
     RateLimiter,
@@ -206,16 +208,40 @@ class TestActionability(unittest.TestCase):
 
 
 class TestConfigToggles(unittest.TestCase):
+    """Config loading must be hermetic: never read the operator's live
+    ``config/alerts.env`` (which intentionally mutes alerts in ops). Every
+    test here passes an explicit tmp ``config_file``.
+    """
+
+    @staticmethod
+    def _write_config(tmpdir, body):
+        path = Path(tmpdir) / "alerts.env"
+        path.write_text(body, encoding="utf-8")
+        return path
+
+    # toggles explicitly ON; thresholds omitted so code defaults apply
+    ENABLED_CONF = (
+        "# test fixture: alerts explicitly enabled\n"
+        "ALERTS_ENABLED=1\n"
+        "ALERT_SPREAD_ENABLED=1\n"
+        "ALERT_CROSS_ENABLED=1\n"
+    )
+
     def test_thresholds_and_toggles_via_env(self):
-        cfg = load_config(environ={
-            "SPREAD_THRESHOLD_BPS": "250",
-            "CROSS_ISSUER_THRESHOLD_BPS": "75",
-            "ALERT_RATE_LIMIT_MIN": "45",
-            "ALERT_DIGEST_MODE": "1",
-            "ALERT_SPREAD_ENABLED": "0",
-            "TELEGRAM_ALERTS": "off",
-        })
-        self.assertEqual(cfg.spread_threshold_bps, Decimal("250"))
+        with tempfile.TemporaryDirectory() as td:
+            # file values that must lose to the explicit environ below
+            cfg_file = self._write_config(
+                td, self.ENABLED_CONF + "SPREAD_THRESHOLD_BPS=999\n"
+            )
+            cfg = load_config(environ={
+                "SPREAD_THRESHOLD_BPS": "250",
+                "CROSS_ISSUER_THRESHOLD_BPS": "75",
+                "ALERT_RATE_LIMIT_MIN": "45",
+                "ALERT_DIGEST_MODE": "1",
+                "ALERT_SPREAD_ENABLED": "0",
+                "TELEGRAM_ALERTS": "off",
+            }, config_file=cfg_file)
+        self.assertEqual(cfg.spread_threshold_bps, Decimal("250"))  # env > file
         self.assertEqual(cfg.cross_threshold_bps, Decimal("75"))
         self.assertEqual(cfg.rate_limit_min, 45.0)
         self.assertTrue(cfg.digest_mode)
@@ -223,12 +249,39 @@ class TestConfigToggles(unittest.TestCase):
         self.assertFalse(cfg.telegram_enabled)
 
     def test_defaults(self):
-        cfg = load_config(environ={})
+        with tempfile.TemporaryDirectory() as td:
+            cfg = load_config(environ={}, config_file=self._write_config(td, self.ENABLED_CONF))
+            self.assertEqual(cfg.spread_threshold_bps, Decimal("150"))
+            self.assertEqual(cfg.cross_threshold_bps, Decimal("100"))
+            self.assertEqual(cfg.rate_limit_min, 30.0)
+            self.assertFalse(cfg.digest_mode)
+            self.assertTrue(cfg.enabled and cfg.spread_enabled and cfg.cross_enabled)
+
+    def test_missing_config_file_falls_back_to_code_defaults(self):
+        # a missing config file is valid: no crash, numeric defaults apply
+        with tempfile.TemporaryDirectory() as td:
+            cfg = load_config(environ={}, config_file=Path(td) / "does-not-exist.env")
         self.assertEqual(cfg.spread_threshold_bps, Decimal("150"))
         self.assertEqual(cfg.cross_threshold_bps, Decimal("100"))
         self.assertEqual(cfg.rate_limit_min, 30.0)
         self.assertFalse(cfg.digest_mode)
-        self.assertTrue(cfg.enabled and cfg.spread_enabled and cfg.cross_enabled)
+
+    def test_disabled_config_is_valid(self):
+        # alerts muted is a legitimate config (that IS the live ops state)
+        with tempfile.TemporaryDirectory() as td:
+            cfg_file = self._write_config(
+                td,
+                "# test fixture: alerts muted\n"
+                "ALERTS_ENABLED=0\n"
+                "ALERT_SPREAD_ENABLED=0\n"
+                "ALERT_CROSS_ENABLED=0\n"
+                "TELEGRAM_ALERTS=0\n",
+            )
+            cfg = load_config(environ={}, config_file=cfg_file)
+        self.assertFalse(cfg.enabled)
+        self.assertFalse(cfg.spread_enabled)
+        self.assertFalse(cfg.cross_enabled)
+        self.assertFalse(cfg.telegram_enabled)
 
 
 if __name__ == "__main__":
