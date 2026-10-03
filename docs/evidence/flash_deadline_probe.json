@@ -1,0 +1,87 @@
+{
+  "route_deadline_compare": {
+    "flash": {
+      "build_ts": 1791066480.6059139,
+      "elapsed_s": 0.306,
+      "data_len": 7690,
+      "deadline_words": [
+        1791066480
+      ],
+      "deadline_s_after_request": [
+        0
+      ],
+      "seconds_left": -0.9121079444885254
+    },
+    "swap": {
+      "build_ts": 1791066480.9121125,
+      "elapsed_s": 0.601,
+      "data_len": 7690,
+      "deadline_words": [
+        1791066481
+      ],
+      "deadline_s_after_request": [
+        1
+      ],
+      "seconds_left": -0.5137233734130859
+    },
+    "winner": "swap",
+    "note": "the source with the later in-calldata valid-until wins; quote_and_swap(prefer='auto') falls back to it whenever the preferred source fails the deadline gate"
+  },
+  "deadline_param_probe": {
+    "baseline": {
+      "code": 0,
+      "msg": "success",
+      "extra_param": {},
+      "deadline_words": [
+        1791066481
+      ],
+      "deadline_s_after_request": [
+        0
+      ],
+      "seconds_left": -0.826744794845581
+    },
+    "deadline": {
+      "code": 0,
+      "msg": "success",
+      "extra_param": {
+        "deadline": "1791067081"
+      },
+      "deadline_words": [
+        1791066482
+      ],
+      "deadline_s_after_request": [
+        0
+      ],
+      "seconds_left": -0.4413869380950928
+    },
+    "validTo": {
+      "code": 0,
+      "msg": "success",
+      "extra_param": {
+        "validTo": "1791067081"
+      },
+      "deadline_words": [
+        1791066482
+      ],
+      "deadline_s_after_request": [
+        0
+      ],
+      "seconds_left": -1.0526626110076904
+    },
+    "quoteTtlSeconds": {
+      "code": 0,
+      "msg": "success",
+      "extra_param": {
+        "quoteTtlSeconds": "600"
+      },
+      "deadline_words": [
+        1791066483
+      ],
+      "deadline_s_after_request": [
+        0
+      ],
+      "seconds_left": -0.6608550548553467
+    }
+  },
+  "ts": 1791066483.960915
+}

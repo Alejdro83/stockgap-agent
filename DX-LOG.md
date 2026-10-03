@@ -336,4 +336,4 @@ Reinicio (una línea):
 - Broadcast: **tx `0xd8ef9e75467ddb27ab97076e3b112fbe4a552488b81dddd09a81bb4cd490a48f`** via direct-rpc (`eth_sendRawTransaction`, +5 % gasPrice bump), `broadcast_calls=1`, nonce 6, to pinned router `0xB44446b0c8E56988c34f7Ff73Ae904982b5FdDA5`, value 1 wei.
 - Receipt (independently re-fetched): `status 0x1`, block 125,566,635, gasUsed 263,015, effectiveGasPrice 58,276,281 wei, fee 15,327,536,047,215 wei (~0.00001533 BNB). Wallet NVDAB balance after = 3 wei — the swap output landed. `late_retry.used=0`.
 - Balances: before 11,332,964,234,590,841 wei (0.0113330 BNB) → after 11,317,636,698,543,625 wei (0.0113176 BNB); delta 15,327,536,047,216 wei = 1 wei trade + 15,327,536,047,215 wei gas — exact to the wei.
-- No secrets touched or printed (wallet key from the env vault at runtime only). Driver artifact: `data/demo_trade_flash_run.json`.
+- No secrets touched or printed (wallet key from the env vault at runtime only). Driver artifact: `docs/evidence/demo_trade_flash_run.json`.

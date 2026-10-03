@@ -1,0 +1,99 @@
+{
+  "mode": "QUOTE_AND_SWAP",
+  "wallet": "0x069Ac6d8cf3553416fE5a4f0410ebEb758A8F819",
+  "prefer": "auto",
+  "sources": [
+    "flash",
+    "swap"
+  ],
+  "amount_base": "1",
+  "slippage_percent": "8",
+  "stages": {
+    "tx_context_1": {
+      "chain_id": 56,
+      "nonce": 6,
+      "gas_price": 50000000,
+      "fetched_at": 1791067532.2312684
+    },
+    "build_1": {
+      "tried": [
+        {
+          "source": "flash",
+          "elapsed_s": 0.305,
+          "summary": {
+            "vendorName": "LiquidMesh",
+            "toTokenAmount": "3",
+            "minReceiveAmount": "2",
+            "slippagePercent": "8",
+            "data_len": 3146
+          },
+          "deadline_gate": {
+            "ok": true,
+            "deadline": null,
+            "candidates": [],
+            "seconds_left": null,
+            "margin_s": 0.5,
+            "note": "no route deadline word embedded in calldata"
+          }
+        }
+      ],
+      "source": "flash",
+      "deadline_gate": {
+        "ok": true,
+        "deadline": null,
+        "candidates": [],
+        "seconds_left": null,
+        "margin_s": 0.5,
+        "note": "no route deadline word embedded in calldata"
+      },
+      "accepted": true
+    },
+    "simulate_1": {
+      "status": "SUCCESS",
+      "failReason": "",
+      "balanceChanges": [
+        {
+          "contractAddress": "0x02Fca66C1D1aFB4E2A7884261eB00F63598a7436",
+          "tokenType": "Erc20",
+          "change": "3",
+          "owner": "0x069ac6d8cf3553416fe5a4f0410ebeb758a8f819"
+        },
+        {
+          "contractAddress": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "tokenType": "Native",
+          "change": "-1",
+          "owner": "0x069ac6d8cf3553416fe5a4f0410ebeb758a8f819"
+        }
+      ],
+      "allowanceChanges": []
+    },
+    "deadline_gate_presign_1": {
+      "ok": true,
+      "deadline": null,
+      "candidates": [],
+      "seconds_left": null,
+      "margin_s": 0.5,
+      "note": "no route deadline word embedded in calldata"
+    },
+    "sign_1": "signed",
+    "broadcast_1": {
+      "txHash": "0xd8ef9e75467ddb27ab97076e3b112fbe4a552488b81dddd09a81bb4cd490a48f",
+      "via": "direct-rpc",
+      "broadcast_calls": 1,
+      "nonce": 6
+    },
+    "settlement_1": {
+      "settled": true,
+      "status": "0x1",
+      "blockNumber": "0x77bfeab",
+      "gasUsed": "0x40367",
+      "note": "nonce advanced"
+    }
+  },
+  "late_retry": {
+    "used": 0,
+    "cap": 0
+  },
+  "bnb_wei_before": 11332964234590841,
+  "bnb_wei_after": 11317636698543625
+}
