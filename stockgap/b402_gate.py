@@ -45,7 +45,7 @@ class GateConfig:
     network: str = "eip155:56"
     rpc_url: str = DEFAULT_RPC
     max_block_age_s: int = 3600
-    identity: str = "erc8004:bsc-testnet:REGISTRY_PLACEHOLDER#0"
+    identity: str = "erc8004:bsc-mainnet:REGISTRY_PLACEHOLDER#0"
 
 
 def _int(v: Any, default: int) -> int:
