@@ -70,7 +70,7 @@ cd stockgap-agent
 
 # Verify (no Docker — runs directly on Python 3; no Docker build is part of this track)
 python3 -m pytest -q
-# 213 passed in 4.03s
+# 248 passed in 7.24s
 
 # Start the dashboard (local only — no public URL)
 nohup python3 scripts/dashboard.py >> data/dashboard.log 2>&1 &
@@ -105,21 +105,22 @@ Per-module test counts (measured: `grep -c 'def test_' tests/*.py`; no build-ord
 | Module | Tests | Key features |
 |--------|------:|--------------|
 | test_signer | 15 | HMAC-SHA256 signing, OpenSSL cross-check vector |
-| test_alerts | 28 | crossings, rate limiting, ratio≠1 formatting, actionability |
+| test_alerts | 30 | crossings, rate limiting, ratio≠1 formatting, actionability, hermetic config loading |
 | test_b402 | 23 | pay gate: local receipt verify + mock `binance` settlement |
 | test_collector | 14 | batched collection, provenance columns, resilient tick loop |
 | test_dashboard | 13 | read-only dashboard + fragments |
 | test_db | 4 | WAL/busy_timeout factory, `ensure_wal` assertion, ro fresh-read |
-| test_executor | 16 | tx sanitization, chain/router refusals, simulate gate |
+| test_executor | 27 | tx sanitization, chain/router refusals, simulate gate, pre-broadcast deadline gate, unified `quote_and_swap` |
 | test_mcp | 14 | JSON-RPC tools, free/dispatch, idempotent paid calls |
+| test_onchain_writer | 22 | `PriceRegistry` binding, `ORACLE_PUBLISH` toggle, snapshot-id derivation |
 | test_oracle | 27 | per-share close normalization, fallbacks, cache TTL |
 | test_oracle_reliability | 2 | fetch-first reference refresh (no txn during fetch), chunked write holds |
 | test_spread | 30 | spread engine, cross-issuer |
 | test_spread_real | 24 | ratio normalization, NFLX regression, derived-vs-real |
 | test_telemetry | 3 | Sentry `SENTRY_DSN` toggle: no-DSN no-op, DSN init (mocked), app boots |
-| **Total** | **213** | **all passing** |
+| **Total** | **248** | **all passing** |
 
-Recorded suite-size checkpoints in DX-LOG (milestone notes, **not** a build order): 15 → 82 → 98 → 125 → 199 → 202 → **213**.
+Recorded suite-size checkpoints in DX-LOG (milestone notes, **not** a build order): 15 → 82 → 98 → 125 → 199 → 202 → 213 → **248**.
 
 **Token universe (verified live):** **488 tokens = 442 Ondo + 46 BStock**. xStocks are documented in the API but are **NOT listed live** — `rwa/search` for `AAPLx`/`NVDAx`/`TSLAx` returns code 40382 (not found). Never assume 1 token = 1 share: `tokenToShareRatio` ranges ≈0.0667–10.03 (228/488 are exactly 1).
 
@@ -127,7 +128,7 @@ Recorded suite-size checkpoints in DX-LOG (milestone notes, **not** a build orde
 
 ```bash
 python3 -m pytest -q
-# 213 passed in 4.03s
+# 248 passed in 7.24s
 ```
 
 Test coverage includes:
@@ -195,7 +196,7 @@ stockgap-agent/
 ├── stockgap/          # signer, client, collector, spread, alerts, oracle, executor,
 │   │                  #   balance, dashboard, mcp_server, b402_gate, telemetry (+ templates/)
 ├── scripts/           # run_collector, alerts, summary, dashboard launcher, demo driver, fixtures fetchers
-├── tests/             # 13 test modules, 213 tests
+├── tests/             # 14 test modules, 248 tests
 ├── config/            # alerts.env, mcp.env, oracle.env (no live secrets inside)
 ├── fixtures/          # real OCResult<T> envelopes + MANIFEST.json
 ├── data/              # SQLite + logs (not committed, ~400 MB)
@@ -218,7 +219,7 @@ stockgap-agent/
 | [mandates/](./mandates/) | generic per-seat charters (kept project-agnostic on purpose) |
 | [DX-LOG.md](./DX-LOG.md) | full developer-experience log — source of truth for project history |
 
-**Deployment honesty:** everything runs on `localhost:8098` on the build machine — **no public URL**. The three demo-trade broadcasts all reverted on-chain (2-second in-calldata route deadline — proven by `eth_call` replay + calldata decode for `0x9ca3…` and `0x7c33…`; **INFERRED** for `0xfdc9…` (identical pattern, not replayed). Min-return was not the cause of the three broadcast reverts — a real simulate failure `Min return not reached` occurred at 1% slippage on the first demo attempt. Full receipts and root-cause chain in [RECOVERY.md](./RECOVERY.md)); no live b402 `binance` settlement was tested.
+**Deployment honesty:** everything runs on `localhost:8098` on the build machine — **no public URL**. The three demo-trade broadcasts all reverted on-chain (2-second in-calldata route deadline — proven by `eth_call` replay + calldata decode for `0x9ca3…` and `0x7c33…`; **INFERRED** for `0xfdc9…` (identical pattern, not replayed). Min-return was not the cause of the three broadcast reverts — a real simulate failure `Min return not reached` occurred at 1% slippage on the first demo attempt. Full receipts and root-cause chain in [RECOVERY.md](./RECOVERY.md)); no live b402 `binance` settlement was tested (the API account has no b402 merchant provisioned — `/api/v2/b402/*` answers `code=100001008`). Since then the pipeline shipped a **pre-broadcast calldata deadline gate** (`ROUTE_DEADLINE_MARGIN_S`, `BROADCAST_DIRECT`) and tx [`0xd8ef9e75…a48f`](https://bscscan.com/tx/0xd8ef9e75467ddb27ab97076e3b112fbe4a552488b81dddd09a81bb4cd490a48f) (1 wei BNB→NVDAB dust demo, one attempt) is the **first successful live trade** through it; the oracle's on-chain writer is real on BSC mainnet (`PriceRegistry 0x8d2cf4a5…b971`) behind the `ORACLE_PUBLISH=0|1` toggle (default 0 = mock DB ledger).
 
 ## 📜 License
 

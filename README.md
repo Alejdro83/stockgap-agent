@@ -1,18 +1,18 @@
 # StockGap
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-213%20passing-brightgreen)](./tests)
+[![Tests](https://img.shields.io/badge/tests-248%20passing-brightgreen)](./tests)
 [![Python](https://img.shields.io/badge/python-3.x-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![BNB Chain](https://img.shields.io/badge/BNB%20Chain-BSC%2056-F0B90B)](https://www.bnbchain.org/)
 
 > **StockGap measures the gap between tokenized-stock prices and their independent reference close — 488 RWA tokens / 30s — and sells signals to agents over a pay-per-call (x402) MCP layer on BNB Chain.**
 
-Prepared for **BNB Hack: Tokenized Stocks Edition** (submissions lock 2026-10-11 23:59 UTC).
+Prepared for **BNB Hack: Tokenized Stocks Edition** (submissions lock 2026-10-11 12:00 UTC).
 
 - **Repo:** https://github.com/Alejdro83/stockgap-agent (public at submission time)
 - **Deployed demo:** `DEPLOYED_URL` (placeholder — swap when the Northflank deploy lands; judge-runnable instructions below)
-- **Video pitch (5–6 min):** `VIDEO_URL` (placeholder — swap after upload; script in [docs/VIDEO_SCRIPT.md](./docs/VIDEO_SCRIPT.md))
-- **Published methodology paper (ITSC) / written demo:** https://thoracic.clinic/articles/itsc-qs4nqr
+- **Video pitch (≤4 min):** `VIDEO_URL` (placeholder — swap after upload; script in [docs/VIDEO_SCRIPT.md](./docs/VIDEO_SCRIPT.md))
+- **Written demo (judge-runnable, ~10 min):** the [Quickstart](#quickstart-judge-runnable) below runs everything locally; full run notes in [StockGap/README.md](./StockGap/README.md)
 - **Deep-dive README (architecture, verified API details, evidence):** [StockGap/README.md](./StockGap/README.md)
 
 ## What it does
@@ -28,7 +28,7 @@ Prepared for **BNB Hack: Tokenized Stocks Edition** (submissions lock 2026-10-11
 
 ```bash
 git clone https://github.com/Alejdro83/stockgap-agent && cd stockgap-agent
-python3 -m pytest -q          # 213 passed (~4s)
+python3 -m pytest -q          # 248 passed (~7s)
 mkdir -p data                 # data/ is gitignored
 
 # terminal 1: live collector — 30s ticks of 488 RWA tokens (rows land after the first tick)
@@ -52,9 +52,9 @@ StockGap is not a consumer DeFi product — it is the measurement, alerting and 
 ## BNB Chain integration
 
 - **x402/b402 pay-per-call MCP gate** — HTTP 402 responses carry `x402Version:1`; `local_receipt` verifies an **on-chain BSC payment receipt** before dispatch (paid calls are idempotent by tx hash); Binance's `/api/v2/b402/{supported,verify,settle}` adapter ships mock-tested.
-- **Oracle publish** — the oracle writes its predictions/reputation to SQLite; publishing its derived price to **BSC testnet** is the deployment hook (testnet tx hashes pending confirmation — [docs/SUBMISSION_CHECKLIST.md](./docs/SUBMISSION_CHECKLIST.md) A8).
-- **ERC-8004 hooks** — every MCP response carries an `X-ERC8004-Identity` header (`erc8004:bsc-testnet:…`, registry id pending); `oracle_reputation`/`oracle_feedback` implement the ERC-8004-style reputation/feedback interface with an on-chain attestation stub.
-- **Demo-trade pipeline** — BSC mainnet (chain 56) via the Binance Web3 aggregator with a strict simulate-before-broadcast gate.
+- **Oracle publish** — `stockgap/onchain_writer.py` publishes the oracle's derived price to a `PriceRegistry` contract on **BSC mainnet** (chain 56): [`0x8d2cf4a56f754d5770985d95aa179ef4d5b9b971`](https://bscscan.com/address/0x8d2cf4a56f754d5770985d95aa179ef4d5b9b971) (deploy tx [`0x2235be2b…afa1`](https://bscscan.com/tx/0x2235be2b3c516f89f4bdb84f199fb774182c424f024a10d1a35569536948afa1)); first publish tx [`0x8055d62e…7cec`](https://bscscan.com/tx/0x8055d62e8667e5564e3ad448a0a5f769285a918ee7f1b05b3ec436ac1dc97cec) (event `OraclePublish`, snapshot ACN priceE8=19962666700). The writer is real but **toggled**: `ORACLE_PUBLISH=0|1` (default 0 = mock DB ledger).
+- **ERC-8004 hooks** — every MCP response carries an `X-ERC8004-Identity` header (`erc8004:bsc-mainnet:REGISTRY_PLACEHOLDER#0` — registry id honestly still pending); `oracle_reputation`/`oracle_feedback` implement the ERC-8004-style reputation/feedback interface with an on-chain attestation stub.
+- **Demo-trade pipeline** — BSC mainnet (chain 56) via the Binance Web3 aggregator with a strict simulate-before-broadcast gate, a **pre-broadcast calldata deadline gate** (the vendor route deadline is fixed at build+~2 s — no API parameter; probe evidence in `data/flash_deadline_probe.json`) and a unified `Executor.quote_and_swap()` path. First successful live trade: [`0xd8ef9e75…a48f`](https://bscscan.com/tx/0xd8ef9e75467ddb27ab97076e3b112fbe4a552488b81dddd09a81bb4cd490a48f) (1 wei BNB→NVDAB dust demo, one attempt).
 
 ## Growth through the BNB ecosystem & Agent Bazaar
 
@@ -68,9 +68,9 @@ StockGap is the independent price-gap data layer that tokenized-stock issuers an
 | \|spread\| p25 / p50 / p75 | 5.1 / 13.5 / 32.9 bps (abs > 0.5 filter, n ≈ 477K) |
 | Per 30s tick | 488 RWA + 40 cross-issuer pairs |
 | Oracle coverage | 442 underlyings with an independent close |
-| Tests | 213 passing |
+| Tests | 248 passing |
 
-Honest limits: the three demo-trade broadcasts reverted on-chain (2-second in-calldata route deadline — root-caused via `eth_call` replay + calldata decode, [RECOVERY.md](./RECOVERY.md)); live b402 `binance` settlement is mock-tested only.
+Honest limits: three early demo-trade broadcasts reverted on-chain (2-second in-calldata route deadline — root-caused via `eth_call` replay + calldata decode, [RECOVERY.md](./RECOVERY.md) documents them unchanged). The pipeline now ships a **pre-broadcast deadline gate**, and tx [`0xd8ef9e75…a48f`](https://bscscan.com/tx/0xd8ef9e75467ddb27ab97076e3b112fbe4a552488b81dddd09a81bb4cd490a48f) is the **first successful live trade** through the hardened pipeline (1 wei BNB→NVDAB dust demo, one attempt). The oracle's on-chain writer is real on BSC mainnet ([`PriceRegistry 0x8d2cf4a5…b971`](https://bscscan.com/address/0x8d2cf4a56f754d5770985d95aa179ef4d5b9b971)) but **toggled off by default** (`ORACLE_PUBLISH=0` = mock DB ledger). b402: `local_receipt` verification works live against BSC RPC (wrong-recipient receipts correctly rejected), but live Binance `binance` settlement is mock-tested only and the API account has no b402 merchant provisioned — `/api/v2/b402/{supported,verify}` answer HTTP 200 with `code=100001008` ("business entity empty"); `settle` is unexercised. The ERC-8004 registry id is still a placeholder.
 
 ## Evidence
 
