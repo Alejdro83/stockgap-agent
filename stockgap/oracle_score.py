@@ -17,8 +17,12 @@ issuers) this computes:
 
 Results land in ``oracle_reputation`` and are submitted as verifiable
 feedback through a FeedbackWriter — an ERC-8004-style interface. The shipped
-writer is DB-backed (mock ledger); the on-chain writer is future work and
-stubbed behind the same interface. No signing/broadcasting in this module.
+default writer is DB-backed (mock ledger, ``DbFeedbackWriter``); the on-chain
+writer (``OnchainFeedbackWriter``, implemented over
+``stockgap.onchain_writer``) anchors ONE PriceRegistry publish per oracle run
+on BSC mainnet behind the SAME interface. Enable with ``ORACLE_PUBLISH=1``
+(default 0 = mock ledger; a standalone toggle, separate from the swap guards).
+Signing/broadcast live in ``stockgap.onchain_writer`` — never in this module.
 
 Scoring input for actual opens: a JSON file mapping ticker -> real open price
 (e.g. from scripts/fetch_underlying_market.py output). ``--self-test`` proves
@@ -43,6 +47,7 @@ from . import db  # noqa: E402 — shared WAL/busy_timeout connection factory
 
 __all__ = [
     "DbFeedbackWriter",
+    "build_feedback_writer",
     "fetch_real_opens",
     "load_real_opens",
     "write_reputation",
@@ -277,17 +282,66 @@ class DbFeedbackWriter:
 
 
 class OnchainFeedbackWriter:
-    """Future work: submit feedback as ERC-8004 on-chain attestation.
+    """On-chain feedback writer: ONE anchored PriceRegistry publish per oracle run.
 
-    Deliberately NOT implemented here (no signing/broadcasting in scope);
-    kept so the scorer's interface is final. Implement ``submit`` to sign and
-    broadcast an ERC-8004 feedback tx and return its receipt as feedback_ref.
+    Implements the same ``submit(run_id, payload) -> feedback_ref`` interface
+    as :class:`DbFeedbackWriter` (drop-in for ``ScoreOracle(feedback_writer=)``).
+    Per run exactly one snapshot is anchored on BSC mainnet — a representative
+    underlying (the run's first submitted row, e.g. ACNon), NOT one tx per
+    scored row. The anchor carries ``priceE8`` = ``predicted_open`` (the
+    oracle's price claim, quantized x1e8 ROUND_HALF_EVEN in
+    :func:`stockgap.onchain_writer.quantize_price_e8`) and a bytes32
+    ``snapshotId`` derived deterministically from run/cutoff/ticker.
+
+    Every row of the run cites the SAME confirmed anchor ref
+    ``bsc:56:<txhash>`` — issued ONLY after the receipt shows status==0x1.
+    If the tx cannot be confirmed (reverted / unconfirmed / duplicate) the
+    error propagates and NO feedback_ref is written: a claimed on-chain ref is
+    never recorded before confirmation. Signing/broadcast are delegated to the
+    injected ``publisher`` (``stockgap.onchain_writer.OnchainPublisher``).
     """
 
+    def __init__(self, publisher: Any):
+        self._publisher = publisher
+        self.refs: dict = {}  # run_id -> confirmed bsc:56:<txhash> anchor
+
     def submit(self, run_id: str, payload: Mapping[str, Any]) -> str:
-        raise NotImplementedError(
-            "ERC-8004 on-chain feedback write is future work — use DbFeedbackWriter"
+        from .onchain_writer import (  # local import: keeps signing out of here
+            REF_PREFIX, derive_snapshot_id, quantize_price_e8,
         )
+        if run_id in self.refs:  # ONE publish per run — not one per row
+            return self.refs[run_id]
+        price = payload.get("predicted_open") or payload.get("price")
+        if price is None or not str(price).strip():
+            raise ValueError("OnchainFeedbackWriter.submit: payload needs predicted_open/price")
+        ticker = str(payload.get("underlying_ticker") or "unknown")
+        snapshot_id = derive_snapshot_id(
+            f"run-{run_id}", str(payload.get("cutoff_ts") or ""), ticker)
+        tx_hash = self._publisher.publish(snapshot_id, quantize_price_e8(price))
+        ref = f"{REF_PREFIX}{tx_hash}"  # confirmed only (publish raises otherwise)
+        self.refs[run_id] = ref
+        return ref
+
+
+def build_feedback_writer(
+    con: sqlite3.Connection,
+    env: Optional[Mapping[str, str]] = None,
+    publisher: Any = None,
+) -> Any:
+    """Pick the feedback writer via the ``ORACLE_PUBLISH=0|1`` toggle.
+
+    Default (0 / unset) is the mock DB ledger — exactly as before. ``1`` wires
+    the on-chain writer over ``stockgap.onchain_writer.from_env()`` (or an
+    injected publisher). This toggle is oracle-only and separate from the
+    executor's swap guards.
+    """
+    from .onchain_writer import publish_enabled  # local import
+    if publish_enabled(env):
+        if publisher is None:
+            from .onchain_writer import from_env as _publisher_from_env
+            publisher = _publisher_from_env()
+        return OnchainFeedbackWriter(publisher)
+    return DbFeedbackWriter(con)
 
 
 # ---------------- scorer ----------------
@@ -611,7 +665,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if cutoff_ts is None:
             parser.error("no predictions in DB and no --cutoff-ts given")
 
-    scorer = ScoreOracle(args.db)
+    scorer = ScoreOracle(args.db, feedback_writer=build_feedback_writer(con))
     rows = scorer.score(cutoff_ts, actuals)
     print(json.dumps({
         "cutoff_ts": cutoff_ts,

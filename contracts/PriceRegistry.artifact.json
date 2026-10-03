@@ -1,0 +1,87 @@
+{
+  "abi": [
+    {
+      "inputs": [],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "snapshotId",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "priceE8",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "timestamp",
+          "type": "uint256"
+        }
+      ],
+      "name": "OraclePublish",
+      "type": "event"
+    },
+    {
+      "inputs": [],
+      "name": "owner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "snapshotId",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint256",
+          "name": "priceE8",
+          "type": "uint256"
+        }
+      ],
+      "name": "publish",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "name": "published",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x608060405234801561001057600080fd5b50600080546001600160a01b03191633179055610255806100326000396000f3fe608060405234801561001057600080fd5b50600436106100415760003560e01c806339609742146100465780638da5cb5b1461007e578063b19d632b146100a9575b600080fd5b6100696100543660046101e4565b60016020526000908152604090205460ff1681565b60405190151581526020015b60405180910390f35b600054610091906001600160a01b031681565b6040516001600160a01b039091168152602001610075565b6100bc6100b73660046101fd565b6100be565b005b6000546001600160a01b0316331461011d5760405162461bcd60e51b815260206004820152601860248201527f507269636552656769737472793a206e6f74206f776e6572000000000000000060448201526064015b60405180910390fd5b60008281526001602052604090205460ff16156101885760405162461bcd60e51b815260206004820152602360248201527f507269636552656769737472793a206475706c696361746520736e617073686f6044820152621d125960ea1b6064820152608401610114565b600082815260016020818152604092839020805460ff19169092179091558151838152429181019190915283917f7bb61d214dd9941b31b2d31c0db305c96e8382bc6d319d5926b032d6e29beb3c910160405180910390a25050565b6000602082840312156101f657600080fd5b5035919050565b6000806040838503121561021057600080fd5b5050803592602090910135915056fea264697066735822122041b810720ec697f93bdaa77277d088af4570111ac8660909cfe06424e037b83964736f6c63430008130033",
+  "compiler": "solc 0.8.19 (py-solc-x, optimizer 200 runs)",
+  "contract": "<stdin>:PriceRegistry"
+}
