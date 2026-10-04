@@ -3,12 +3,19 @@ for O_APPEND held-fd writers. Findings 1-14 of the Claude review are covered
 where testable (crash-safe gzip, mixed-form prune, vacuous-glob fix, empty-file
 guard, keep clamps, NaN/inf env parsing). Diff-review round 2 (crash-safety):
 parent-dir fsync before the source drop, hardlink-less rename fallback +
-unlink-failure healing to exactly one archive, prune gz-twin dedupe."""
+unlink-failure healing to exactly one archive, prune gz-twin dedupe.
+Round 3 (Claude review of _move_to_archive/_fsync_dir): FileExistsError must
+never fall through to the rename fallback (no-clobber regression), dir fsync is
+best-effort on EINVAL/ENOTSUP mounts (else gzip_pending re-gzips forever), and
+the heal-path (d) cleanup must not be skippable by a racing exists() probe."""
+import errno
 import gzip
 import math
 import os
 import stat
 from pathlib import Path
+
+import pytest
 
 from stockgap import rotation
 
@@ -145,6 +152,116 @@ def test_maybe_rotate_jsonl_heals_failed_unlink_to_exactly_one_archive(tmp_path,
     assert sorted(x.name for x in tmp_path.iterdir()) == [archs[0].name]  # ...and the ONLY file left
     assert archs[0].read_bytes() == b"x" * 100   # content preserved
     assert not p.exists()
+
+
+def test_move_to_archive_reraises_fileexists_and_never_clobbers(tmp_path, monkeypatch):
+    """No-clobber regression (round-3 review): `except OSError` around os.link
+    also catches FileExistsError, so a name collision fell through to
+    os.rename and SILENTLY REPLACED an existing archive. FileExistsError must
+    propagate BEFORE the rename fallback; dst and source both untouched."""
+    p = tmp_path / "ticks.jsonl"
+    _fill(p, 100)
+    dst = tmp_path / "ticks-20260101T000000Z.jsonl"
+    dst.write_text("PRECIOUS")
+
+    def collide(*a, **k):
+        raise FileExistsError(errno.EEXIST, "target exists")
+
+    monkeypatch.setattr(os, "link", collide)
+    with pytest.raises(FileExistsError):
+        rotation._move_to_archive(p, dst)
+    assert dst.read_text() == "PRECIOUS"      # existing archive NOT replaced
+    assert p.read_bytes() == b"x" * 100       # source untouched (no rename happened)
+
+
+def test_maybe_rotate_jsonl_fileexists_collision_is_nonfatal_no_clobber(tmp_path, monkeypatch):
+    """Race form: archive_name probed dst absent, then a same-second twin took
+    the name before os.link ran. The rotation is skipped (False, non-fatal) and
+    the existing archive keeps its content — never overwritten."""
+    p = tmp_path / "ticks.jsonl"
+    _fill(p, 100)
+    dst = tmp_path / "ticks-20260101T000000Z.jsonl"
+    dst.write_text("PRECIOUS")
+
+    def collide(*a, **k):
+        raise FileExistsError(errno.EEXIST, "target exists")
+
+    monkeypatch.setattr(rotation, "archive_name", lambda path: dst)
+    monkeypatch.setattr(os, "link", collide)
+    assert rotation.maybe_rotate_jsonl(p, max_bytes=100) is False
+    assert dst.read_text() == "PRECIOUS"
+    assert p.read_bytes() == b"x" * 100
+
+
+def test_gzip_pending_completes_when_dir_fsync_unsupported(tmp_path, monkeypatch):
+    """FUSE/network mounts have no directory fsync (EINVAL/ENOTSUP). That must
+    be best-effort: swallowing it lets gzip_pending drop the source — otherwise
+    every pass re-gzips and the uncompressed source is never reclaimed."""
+    for err in (errno.EINVAL, errno.ENOTSUP):
+        p = tmp_path / f"ticks-2026010{err}T000000Z.jsonl"
+        payload = '{"a": 1}\n{"b": 2}\n'
+        p.write_text(payload)
+        real_fsync = os.fsync
+
+        def fsync(fd, _err=err):
+            if stat.S_ISDIR(os.fstat(fd).st_mode):
+                raise OSError(_err, "dir fsync unsupported")
+            return real_fsync(fd)
+
+        monkeypatch.setattr(os, "fsync", fsync)
+        assert rotation.gzip_pending(p) is True
+        assert not p.exists()                  # source reclaimed
+        with gzip.open(str(p) + ".gz", "rt", encoding="utf-8") as fh:
+            assert fh.read() == payload
+        monkeypatch.undo()
+
+
+def test_gzip_pending_keeps_source_on_real_dir_fsync_error(tmp_path, monkeypatch):
+    """Only EINVAL/ENOTSUP are best-effort: a real fsync failure (EIO) must
+    still abort BEFORE the source unlink — the source is protected."""
+    p = tmp_path / "ticks-20260101T000000Z.jsonl"
+    p.write_text("payload\n")
+    real_fsync = os.fsync
+
+    def fsync(fd):
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            raise OSError(errno.EIO, "i/o error")
+        return real_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", fsync)
+    assert rotation.gzip_pending(p) is False
+    assert p.exists() and p.read_text() == "payload\n"   # source kept
+
+
+def test_move_to_archive_heal_cleanup_not_skipped_by_exists_race(tmp_path, monkeypatch):
+    """The bare path.exists() probe in the unlink-failure handler can itself
+    raise in a rare race (e.g. EIO on stat). That must NOT skip the (d)
+    duplicate cleanup: the full-size dst twin is removed, the source survives,
+    and the error still propagates (round-3 review)."""
+    p = tmp_path / "ticks.jsonl"
+    _fill(p, 100)
+    dst = tmp_path / "ticks-20260101T000000Z.jsonl"
+    real_exists, real_unlink = Path.exists, Path.unlink
+    state = {"probed": False}
+
+    def flaky_exists(self, *a, **k):
+        if self == p and not state["probed"]:   # only the FIRST source probe races
+            state["probed"] = True
+            raise OSError(errno.EIO, "stat race")
+        return real_exists(self, *a, **k)
+
+    def flaky_unlink(self, *a, **k):
+        if self.name == p.name:                 # source unlink fails -> heal path
+            raise OSError("unlink denied")
+        return real_unlink(self, *a, **k)
+
+    monkeypatch.setattr(Path, "exists", flaky_exists)
+    monkeypatch.setattr(Path, "unlink", flaky_unlink)
+    with pytest.raises(OSError):
+        rotation._move_to_archive(p, dst)
+    assert state["probed"]                      # the racing probe really fired
+    assert not real_exists(dst)                 # (d) cleanup ran — no full-size twin
+    assert p.read_bytes() == b"x" * 100         # source intact
 
 
 def test_gzip_pending_preserves_content(tmp_path):

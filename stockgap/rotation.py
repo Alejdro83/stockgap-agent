@@ -26,6 +26,7 @@ crash leftovers (``*.gz.tmp``) are never counted as archives.
 """
 from __future__ import annotations
 
+import errno
 import gzip
 import logging
 import math
@@ -116,6 +117,9 @@ def _move_to_archive(path: Path, dst: Path) -> None:
 
     (a) ``os.link`` + ``path.unlink``: atomic create-if-absent — a name
         collision FAILS instead of silently overwriting (finding 7).
+        ``FileExistsError`` is re-raised BEFORE the rename fallback: it is an
+        ``OSError`` subclass, and falling through would silently REPLACE the
+        existing archive (round-3 review regression).
     (b) Hardlink-less mounts (some FUSE/network filesystems): ``os.link`` raises
         -> fall back to ``os.rename`` (``dst`` was probed absent by
         ``archive_name``; the collector is the single writer).
@@ -126,25 +130,34 @@ def _move_to_archive(path: Path, dst: Path) -> None:
         — the end state is exactly one archive name.
     (d) Anything still failing: best-effort ``dst.unlink()`` (only while the
         source survives — a lone ``dst`` IS the archive) before re-raising, so
-        the next tick cannot accumulate full-size duplicate archives.
+        the next tick cannot accumulate full-size duplicate archives. The
+        survival probes are wrapped: a racing ``exists()`` error must never
+        skip this cleanup (round-3 review) — an undeterminable state cleans up
+        (a stray twin is self-healing; a silent full-size duplicate is not).
     """
     try:
         os.link(path, dst)                     # (a) atomic create-if-absent
+    except FileExistsError:
+        raise                                  # no-clobber: never fall through to rename (round-3 review)
     except OSError:
         os.rename(path, dst)                   # (b) no hardlinks on this mount: plain move
         return
     try:
         path.unlink()
     except OSError:
-        if not path.exists():
-            return   # the unlink actually landed (e.g. EIO-after-unlink): dst is the archive
         try:
+            if not path.exists():
+                return   # the unlink actually landed (e.g. EIO-after-unlink): dst is the archive
             os.rename(path, dst)               # (c) resolve the twin pair in one op
             if path.exists():                  # same-inode no-op: dst is a redundant twin
                 dst.unlink()
                 os.rename(path, dst)
         except OSError:
-            if path.exists():
+            try:
+                surviving = path.exists()      # wrapped probe: an error here must NOT skip (d)
+            except OSError:
+                surviving = True               # undeterminable: never leave a possible full-size duplicate
+            if surviving:
                 try:
                     dst.unlink()               # (d) never leave a full-size duplicate behind
                 except OSError:
@@ -169,10 +182,22 @@ def maybe_rotate_jsonl(path: Path, max_bytes: int) -> bool:
         return False  # non-fatal mirror — a rotation problem must never fail a tick
 
 def _fsync_dir(d: Path) -> None:
-    """fsync a directory fd: makes the renames/unlinks inside it durable."""
+    """fsync a directory fd: makes the renames/unlinks inside it durable.
+
+    BEST-EFFORT on mounts without directory fsync (FUSE/network: EINVAL or
+    ENOTSUP — logged at debug and swallowed): raising there aborted
+    ``gzip_pending`` before the source unlink, so every pass re-gzipped and the
+    uncompressed source was never reclaimed (round-3 review). Any OTHER error
+    re-raises: a real fsync failure must still protect the source.
+    """
     fd = os.open(d, os.O_RDONLY)
     try:
         os.fsync(fd)
+    except OSError as exc:
+        if exc.errno in (errno.EINVAL, errno.ENOTSUP):
+            log.debug("dir fsync unsupported on %s: %s", d, exc)   # best-effort: continue
+        else:
+            raise
     finally:
         os.close(fd)
 
