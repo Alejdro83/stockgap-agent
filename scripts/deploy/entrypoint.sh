@@ -12,6 +12,9 @@
 #         */5  scripts/ensure_collector.sh
 #   (d) tail -F /data/collector.log so the collector's own log (incl.
 #       crash-loop tracebacks) reaches container stdout / Northflank logs
+#   (e) data/log rotation every 10 min under flock (scripts/rotate_data.py,
+#       niced 19): prune retention first, gzip pending JSONL archives
+#       (crash-safe .gz.tmp then replace), copytruncate oversized logs
 #
 # Every loop logs to stdout (container logs) AND /data/logs/. SIGTERM/SIGINT
 # shut everything down cleanly and FAST (Northflank grace = 30 s):
@@ -235,6 +238,20 @@ PIDS+=($!)
         sleep 120
     done
 ) > >(tee -a "$LOGS/alerts-cron.log") 2>&1 &
+PIDS+=($!)
+
+# (e) data/log rotation — every 10 min under flock: prune retention first,
+#     gzip pending JSONL archives (renamed by the collector; crash-safe .tmp
+#     then replace), copytruncate oversized logs (tee -a/FileHandler/>> hold
+#     O_APPEND fds — rename would strand their writes). Idempotent, niced:
+#     the first pass gzips the existing ~740 MB mirror.
+(
+    while true; do
+        flock -n -E 0 "$DATA/rotate.lock" nice -n 19 python3 scripts/rotate_data.py \
+            || log "rotate: pass failed (next try in 600s)"
+        sleep 600
+    done
+) > >(tee -a "$LOGS/rotate.log") 2>&1 &
 PIDS+=($!)
 
 # (d) the collector logs to /data/collector.log (its FileHandler plus the

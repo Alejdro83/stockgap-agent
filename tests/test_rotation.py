@@ -172,3 +172,41 @@ def test_record_tick_triggers_rename_rotation(tmp_path):
     archs = rotation.find_archives(tmp_path / "ticks.jsonl")
     assert len(archs) == 1 and archs[0].stat().st_size == 50
     assert jsonl.exists() and jsonl.stat().st_size > 0  # fresh mirror, same tick
+
+
+def _load_rotate_data():
+    import importlib.util
+    script = Path(__file__).resolve().parents[1] / "scripts" / "rotate_data.py"
+    spec = importlib.util.spec_from_file_location("rotate_data", script)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_rotate_data_end_to_end_and_idempotent(tmp_path, monkeypatch):
+    """Full pass: prune frees space first, gzip pending JSONL archives,
+    copytruncate oversized logs; second run is a no-op (finding 14)."""
+    mod = _load_rotate_data()
+    data = tmp_path / "data"
+    (data / "logs").mkdir(parents=True)
+    # pending uncompressed JSONL archives (the collector's rename output) + 1 old .gz
+    (data / "ticks-20260101T000000Z.jsonl").write_text('{"x": 1}\n')
+    (data / "ticks-20251201T000000Z.jsonl.gz").write_text("old")
+    # streams the plan v1 missed (finding 4): data/*.log + logs/*.log + alerts.jsonl
+    (data / "oracle.log").write_text("o" * 70000)      # over the 64 KB floor
+    (data / "logs" / "rotate.log").write_text("r" * 70000)
+    (data / "alerts.jsonl").write_text('{"a": 1}\n')
+    monkeypatch.setenv("LOG_MAX_MB", "0.001")     # floats allowed; floors at 64 KB (review-2.8b)
+    monkeypatch.setenv("LOG_KEEP_ARCHIVES", "5")
+    monkeypatch.setenv("JSONL_KEEP_ARCHIVES", "1")
+    mod.main(data)
+    listing1 = sorted(p.name for p in data.iterdir()) + sorted(p.name for p in (data / "logs").iterdir())
+    assert (data / "ticks-20260101T000000Z.jsonl.gz").exists()
+    assert not (data / "ticks-20260101T000000Z.jsonl").exists()
+    assert not (data / "ticks-20251201T000000Z.jsonl.gz").exists()  # pruned (keep=1)
+    assert len(rotation.find_archives(data / "oracle.log")) == 1
+    assert len(rotation.find_archives(data / "logs" / "rotate.log")) == 1
+    assert (data / "oracle.log").stat().st_size == 0
+    mod.main(data)   # idempotent: nothing new created
+    listing2 = sorted(p.name for p in data.iterdir()) + sorted(p.name for p in (data / "logs").iterdir())
+    assert listing1 == listing2
