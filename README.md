@@ -1,7 +1,7 @@
 # StockGap
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-248%20passing-brightgreen)](./tests)
+[![Tests](https://img.shields.io/badge/tests-263%20passing-brightgreen)](./tests)
 [![Python](https://img.shields.io/badge/python-3.x-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![BNB Chain](https://img.shields.io/badge/BNB%20Chain-BSC%2056-F0B90B)](https://www.bnbchain.org/)
 

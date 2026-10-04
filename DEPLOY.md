@@ -10,6 +10,7 @@ Everything runs in **ONE container** with **ONE persistent volume mounted at `/d
 | watchdog | `scripts/ensure_collector.sh` | every 5 min (restarts collector only when dead) |
 | oracle | `flock -n data/oracle.lock python3 stockgap/oracle.py --once` | every 5 min |
 | alerts | `python3 scripts/alerts.py` (one scan) | every 2 min |
+| rotate | `nice -n 19 python3 scripts/rotate_data.py` under `flock` | every 10 min (prune → gzip → copytruncate) |
 
 Supervisor: `scripts/deploy/entrypoint.sh` (bash loops + `tee` to stdout and
 `/data/logs/`; SIGTERM/SIGINT stop everything cleanly). Inside the container
@@ -48,6 +49,7 @@ Precedence everywhere: real environment > `config/*.env` file > code defaults
 - Alerts (`config/alerts.env`, override via `STOCKGAP_ALERTS_CONFIG`): `ALERTS_ENABLED`, `ALERT_SPREAD_ENABLED`, `ALERT_CROSS_ENABLED`, `SPREAD_THRESHOLD_BPS`, `CROSS_ISSUER_THRESHOLD_BPS`, `ALERT_RATE_LIMIT_MIN`, `ALERT_SCAN_INTERVAL`, `ALERT_DIGEST_MODE`, `ALERT_DIGEST_INTERVAL_MIN`, `ALERT_DIGEST_MAX`, `ALERT_METRIC` (`real`/`derived`), `TELEGRAM_ALERTS`, `TELEGRAM_CHAT_ID`, `ALERT_FILE_LOG`, `ALERT_LOG`
 - Oracle (`config/oracle.env`, override via `STOCKGAP_ORACLE_CONFIG`): `ORACLE_ENABLED`, `ORACLE_INTERVAL_MIN`, `ORACLE_CUTOFF_WEEKDAY`, `ORACLE_CUTOFF_HOUR`, `ORACLE_CUTOFF_MINUTE`, `ORACLE_DEVIATION_FLAG_BPS`, `ORACLE_UNIVERSE_TTL_S`, `ORACLE_BATCH_SIZE`, `ORACLE_STAGGER_S`, `ORACLE_REF_TTL_S`, `ORACLE_REF_MAX_PER_TICK`, `ORACLE_REF_STAGGER_S`
 - Collector: `REFERENCE_MAX_AGE_S` (default 1800)
+- Rotation (`scripts/rotate_data.py` + the collector's per-tick hook): `JSONL_MAX_MB` (default 100, floor 1 MB — the collector renames the live `ticks.jsonl` at this size), `JSONL_KEEP_ARCHIVES` (default 5), `LOG_MAX_MB` (default 20, float MB, floor 64 KB — copytruncate threshold for `data/*.log`, `data/logs/*.log`, `alerts.jsonl`), `LOG_KEEP_ARCHIVES` (default 3)
 - Pipeline / on-chain toggles: `ORACLE_PUBLISH` (`0|1`, default `0` = mock DB ledger; `1` = publish the oracle's derived price to the `PriceRegistry` contract on BSC mainnet), `ROUTE_DEADLINE_MARGIN_S` (default `3.0` — pre-broadcast deadline-gate inclusion headroom, seconds), `BROADCAST_DIRECT` (`0|1`, default `0` = Binance relay; `1` = direct `eth_sendRawTransaction` with a +5% gasPrice bump)
 - MCP / pay-per-call (`config/mcp.env`, override via `STOCKGAP_MCP_CONFIG`): `MCP_PAY_MODE`, `B402_PROVIDER`, `MCP_MERCHANT`, `MCP_PRICE_WEI`, `MCP_ASSET`, `MCP_CHAIN_ID`, `MCP_NETWORK`, `MCP_RPC_URL`, `MCP_MAX_BLOCK_AGE_S`, `MCP_ERC8004_ID`
 - Executor (off by default): `EXECUTOR_ENABLED`, `MAX_TRADE_USD`, `STOCKGAP_WALLET`, `STOCKGAP_RPC_URL`, `WALLET_PRIVATE_KEY` (runtime-only secret — leave unset)
@@ -84,7 +86,7 @@ target steady state).
    - `deployment.instances: 0` — held at zero until steps 4–5 are done
    - `runtime.ports`: name `http`, port `8098`, protocol `HTTP`, `publicNetworkAccess: true`
    - `docker.configType: "default"` (the Dockerfile CMD is the supervisor)
-4. **Volume** (BEFORE first start): attach a persistent volume to the service, mount path `/data`, ≥10 GB (host data: DB ~356 MB + JSONL ~740 MB and growing; logs rotate nowhere).
+4. **Volume** (BEFORE first start): attach a persistent volume to the service, mount path `/data`, ≥10 GB (host data: DB ~356 MB + JSONL ~740 MB and growing; JSONL + logs now rotate, the DB does not).
 5. **Link the three secrets to the service** (`PATCH /v1/projects/stockgap/secrets/{name}` with `{"serviceIds": ["<service-id>"]}`) — BEFORE first start.
 6. **First start**: scale to **`instances: 1`** — the first container boots only now, with the volume mounted and all secrets already in its environment (the invariant above). Steady state is explicitly `instances: 1`.
 7. Health check: HTTP **200 on `/`** (port 8098). (The image also carries a Docker `HEALTHCHECK` doing the same.)
@@ -98,5 +100,5 @@ target steady state).
 - All crons live in one container as sleep loops: cadence drifts by the task duration (minutes-level, fine for 2–5 min crons). Oracle overlap is guarded by `flock -n` exactly like the host.
 - A stale `collector.pid` on the volume can't fool the watchdog (entrypoint deletes it at startup), but PID checks only work within the container's PID namespace — correct here.
 - SQLite WAL runs on the Northflank volume; `busy_timeout=10s` + `BEGIN IMMEDIATE` (see `stockgap/db.py`) absorb slower storage, but volume I/O latency directly affects tick cadence.
-- `/data` grows without rotation (JSONL especially) — monitor volume usage.
+- `/data` growth is now PARTIALLY bounded: the JSONL mirror and all operational logs rotate (live file ≤ `JSONL_MAX_MB`/`LOG_MAX_MB`, archives pruned to `JSONL_KEEP_ARCHIVES`/`LOG_KEEP_ARCHIVES`, compressed — measured on a real 50 MB `ticks.jsonl` sample: `gzip -6` → 7.2 MB = **14.4 % of original**, 7.0×). **`spread_ticks.db` + WAL are NOT bounded** by this mechanism and remain the long-term growth driver — monitor volume usage.
 - Port 8098 is public; the dashboard is read-only but also serves `POST /mcp` (pay-per-call gate, `MCP_PAY_MODE=free` by default). Restrict network access if this should not be internet-facing.
