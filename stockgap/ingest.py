@@ -32,6 +32,16 @@ tests/test_ingest.py:
   column-set mismatch (must EQUAL exactly) -> 422, nothing written; a column
   the NF-side table lacks answers 422 "NF schema older than local — deploy
   first" [R2b].
+- Mode MUST match the table class: ``append`` is valid ONLY for the append
+  tables (spread_ticks, cross_issuer_ticks, oracle_predictions) and
+  ``snapshot`` ONLY for the snapshot tables (oracle_reputation,
+  oracle_reference, collector_meta). A mismatch -> 422 BEFORE any DB work —
+  ``mode: "snapshot"`` can NEVER reach the upsert path and rewrite append
+  history, and ``mode: "append"`` can never freeze snapshot healing.
+- Every row must carry its primary key EXPLICITLY and non-NULL (NULL or
+  missing -> 422, fixed ``detail`` body): a NULL INTEGER PRIMARY KEY
+  auto-assigns a fresh id in SQLite, which breaks idempotent replays on
+  every re-POST (and inserts a new row per snapshot POST).
 - Write semantics: ONE ``db.write_txn`` per request (BEGIN IMMEDIATE).
   ``append`` = ``INSERT OR IGNORE`` with explicit id — replays are
   idempotent and history is unrewritable. ``snapshot`` = REAL upsert
@@ -81,10 +91,18 @@ DEPLOY_FIRST = "NF schema older than local — deploy first"
 
 # The ONLY tables that accept rows. alert_state is host-owned (NOT shipped)
 # and oracle_feedback is explicitly NOT shipped (sync model, plan v4).
-INGEST_TABLES = frozenset({
+# TABLE CLASSES = the mode contract: append tables hold UNREWRITABLE history
+# (id-watermarked, INSERT OR IGNORE); snapshot tables hold point-in-time
+# values healed by upsert-by-PK on re-ship. A mode/class mismatch -> 422
+# BEFORE any DB work, so `mode: "snapshot"` can NEVER reach the upsert path
+# and rewrite append history.
+APPEND_TABLES = frozenset({
     "spread_ticks", "cross_issuer_ticks", "oracle_predictions",
+})
+SNAPSHOT_TABLES = frozenset({
     "oracle_reputation", "oracle_reference", "collector_meta",
 })
+INGEST_TABLES = APPEND_TABLES | SNAPSHOT_TABLES
 MODES = ("append", "snapshot")
 
 # Tables created by collector.SCHEMA + oracle.SCHEMA. oracle_reputation is
@@ -257,6 +275,15 @@ def _apply(payload: bytes) -> dict:
         raise IngestError(f"unknown table: {table!r}")
     if mode not in MODES:
         raise IngestError("mode must be 'append' or 'snapshot'")
+    expected_mode = "append" if table in APPEND_TABLES else "snapshot"
+    if mode != expected_mode:
+        # Mode MUST match the table class: snapshot-on-append would REWRITE
+        # immutable history (real upsert), append-on-snapshot would freeze
+        # one pass's values and defeat the re-ship heal. Pre-validation [R2].
+        raise IngestError(
+            f"mode {mode!r} does not match table class: {table!r} is an "
+            f"{expected_mode}-class table (append history is unrewritable, "
+            f"snapshot rows are upserted) — use mode {expected_mode!r}")
     if not isinstance(rows, list):
         raise IngestError("rows must be a list of objects")
     if len(rows) > MAX_ROWS:
@@ -287,8 +314,17 @@ def _write(
     notnull = {name for name, nn, _ in info if nn}
 
     # Column-set must EQUAL the table's exactly — no partial rows that could
-    # silently wipe columns [R2].
+    # silently wipe columns [R2]. Every pk must be EXPLICIT and non-NULL:
+    # a NULL INTEGER PRIMARY KEY auto-assigns a fresh id (append replays stop
+    # being idempotent; snapshot inserts a new row per POST) and a missing pk
+    # means the same trap behind the column-set rule.
     for i, row in enumerate(rows):
+        for pk in pks:
+            if pk not in row or row[pk] is None:
+                raise IngestError(
+                    f"primary key {pk!r} must be an explicit non-NULL value "
+                    f"(rows[{i}]) — a NULL/missing pk would break idempotent "
+                    "replays")
         keys = set(row)
         extra = keys - colset
         if extra:

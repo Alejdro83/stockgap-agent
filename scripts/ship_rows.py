@@ -26,8 +26,10 @@ Contract highlights (each is tested in tests/test_ship_rows.py):
 - All defaults resolve against REPO_ROOT (never cwd — cron has no env and
   cwd is $HOME). Config comes from ``config/ingest.env`` (chmod 600,
   gitignored) holding STOCKGAP_INGEST_URL + STOCKGAP_INGEST_TOKEN; real env
-  vars override. The token is NEVER accepted via argv (visible in ``ps`` and
-  ``crontab -l``) and never logged.
+  vars override. Group/world bits on the file -> ONE loud warning naming the
+  ``chmod 600`` fix (non-fatal; the file's values are never logged). The
+  token is NEVER accepted via argv (visible in ``ps`` and ``crontab -l``)
+  and never logged.
 - SELF-LOCK: ``fcntl.flock`` (non-blocking) on ``data/ship.lock`` — this is
   the ONLY lock in the system; the crontab line (Task 7) has NO ``flock``
   wrapper (a wrapper would hold the lock and make every pass exit doing
@@ -74,7 +76,12 @@ Contract highlights (each is tested in tests/test_ship_rows.py):
   error/5xx/429; 413 = FATAL with the hint "halve SHIP_BATCH"; 401/403/422 =
   FATAL, the 422 body is printed (surfaces "NF schema older than local —
   deploy first"); 503 with body "ingest disabled" = clear exit WITHOUT
-  retrying. A summary line is logged ONLY when something shipped or failed.
+  retrying. REDIRECTS ARE NEVER FOLLOWED: urllib's default redirect handler
+  would re-send the ``Authorization`` header to the redirect target (even
+  across hosts), so any 3xx is a FATAL "unexpected redirect" (exit 4, no
+  retry, nothing forwarded anywhere) — a no-redirect opener turns the 3xx
+  into a visible ``HTTPError`` instead of following it. A summary line is
+  logged ONLY when something shipped or failed.
   ``SHIP_DRY_RUN=1`` = no network calls at all (reports what it would ship,
   writes no watermark). One-shot per invocation (cron-driven).
 """
@@ -201,12 +208,28 @@ def _truthy(value: str) -> bool:
     return value.strip().lower() in ("1", "true", "yes", "on")
 
 
+def _warn_loose_env_perms(path: Path) -> None:
+    """ONE loud warning when config/ingest.env is group/world-accessible.
+
+    Non-fatal (the pass continues) — the warning names the ``chmod 600`` fix
+    and NEVER any of the file's values.
+    """
+    try:
+        mode = path.stat().st_mode & 0o777
+    except OSError:
+        return  # no file: nothing to protect
+    if mode & 0o077:
+        log.warning("config/ingest.env is group/world-accessible (mode "
+                    "%04o) — run `chmod 600 %s` (it holds the ingest "
+                    "token; values are never logged)", mode, path)
+
 def load_config(env_file: Path) -> Config:
     """config/ingest.env (KEY=VALUE) with real env vars overriding. [R7]
 
     The token value is NEVER echoed in errors or logs.
     """
     vals = _parse_env_file(env_file)
+    _warn_loose_env_perms(env_file)
     for key in KNOWN_KEYS:  # real env vars win over the file
         if key in os.environ:
             vals[key] = os.environ[key]
@@ -352,6 +375,29 @@ def save_watermark(path: Path, wm: Dict[str, int]) -> None:
 
 # ------------------------------ HTTP ---------------------------------------
 
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Redirects are NEVER followed — return None so the redirect is refused.
+
+    urllib's default handler copies the request headers — INCLUDING the
+    ``Authorization`` header added via ``add_header`` — to the redirect
+    target (301/302/303 are followed on GET and POST, even across hosts), so
+    following one would leak the ingest token. Returning None makes
+    ``OpenerDirector.error`` fall through to ``http_error_default``, which
+    raises ``HTTPError`` on the 3xx itself: ``_request`` surfaces it as a
+    response and ``_request_retried`` treats any 3xx as FATAL "unexpected
+    redirect". Chosen over stripping the header and still following because
+    it is both smaller and safer: nothing reaches the redirect target at all
+    (rows included) and a mis-pointed URL fails loudly instead of silently.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None  # never build a redirected request
+
+
+# urllib.request.urlopen's default opener must not follow redirects (the
+# tests replace urlopen wholesale and are unaffected).
+urllib.request.install_opener(urllib.request.build_opener(_NoRedirectHandler()))
+
 def _request(cfg: Config, method: str, url: str,
              payload: Optional[bytes] = None):
     req = urllib.request.Request(url, data=payload, method=method)
@@ -383,6 +429,12 @@ def _request_retried(cfg: Config, method: str, url: str,
         text = body.decode("utf-8", "replace")
         if 200 <= status < 300:
             return status, text
+        if 300 <= status < 400:
+            raise ShipError(f"{what}: unexpected redirect (HTTP {status}) — "
+                            "refusing to follow (the Authorization header "
+                            "must never reach a redirect target); point "
+                            "STOCKGAP_INGEST_URL at the final https:// URL",
+                            EXIT_HTTP)
         if status == 413:
             raise ShipError(f"{what}: 413 payload too large — halve SHIP_BATCH "
                             f"(currently {cfg.batch})", EXIT_HTTP)

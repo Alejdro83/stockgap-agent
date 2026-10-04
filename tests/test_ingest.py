@@ -217,6 +217,17 @@ def fetch_rows(db, table):
     finally:
         con.close()
 
+def count_rows(db, table):
+    """Row count; a never-created table counts as 0 (nothing written)."""
+    con = sqlite3.connect(str(db))
+    try:
+        try:
+            return con.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0]
+        except sqlite3.OperationalError:
+            return 0
+    finally:
+        con.close()
+
 
 def asgi_post(path, headers, chunks):
     """Drive the ASGI app directly: raw bytes headers + streamed body control.
@@ -421,7 +432,10 @@ def test_422_unknown_column_says_deploy_first(client, env):
 def test_422_partial_column_set_nothing_written(client, env):
     row = spread_row()
     del row["spread_bps_real"], row["reference_kind"]  # partial: silently-wiping trap
-    r = post_rows(client, "spread_ticks", "snapshot", [row])
+    # mode=append so this pins the COLUMN-SET rule, not the mode/table-class
+    # rule (spread_ticks is append-class — a snapshot POST here would 422 on
+    # the class mismatch alone; see the mode-contract tests below).
+    r = post_rows(client, "spread_ticks", "append", [row])
     assert r.status_code == 422
     assert fetch_rows(env, "spread_ticks") == []
 
@@ -473,6 +487,80 @@ def test_422_over_max_rows(client, env):
 def test_invalid_mode_422(client, env):
     r = post_rows(client, "spread_ticks", "merge", [spread_row()])
     assert r.status_code == 422
+
+
+# ------------- mode / table-class contract (diff-gate hardening) ------------
+# `snapshot` = REAL upsert overwrite; `append` = INSERT OR IGNORE. The mode
+# must match the table's class or a token holder could rewrite immutable
+# append history (or freeze snapshot healing) in one POST.
+
+def test_422_mode_snapshot_never_reaches_append_tables(client, env):
+    # FULL valid column set — the 422 must come from the class mismatch, not
+    # the column rules, and the upsert path must NEVER run (history intact).
+    assert post_rows(client, "spread_ticks", "append",
+                     [spread_row(id=7, spread_bps="500")]).status_code == 200
+    r = post_rows(client, "spread_ticks", "snapshot",
+                  [spread_row(id=7, spread_bps="999")])
+    assert r.status_code == 422
+    stored = fetch_rows(env, "spread_ticks")
+    assert len(stored) == 1
+    assert stored[0]["spread_bps"] == "500"  # history UNREWRITTEN — no upsert ran
+    for table, maker in (("cross_issuer_ticks", cross_row),
+                         ("oracle_predictions", pred_row)):
+        r = post_rows(client, table, "snapshot", [maker(id=3)])
+        assert r.status_code == 422, table
+        assert count_rows(env, table) == 0, table
+
+
+def test_422_mode_append_never_reaches_snapshot_tables(client, env):
+    # `append` against a snapshot table would INSERT OR IGNORE one pass's
+    # values forever, defeating the upsert heal (e.g. feedback_ref).
+    for table, maker in (("oracle_reputation", rep_row),
+                         ("oracle_reference", ref_row),
+                         ("collector_meta", meta_row)):
+        r = post_rows(client, table, "append", [maker()])
+        assert r.status_code == 422, table
+        assert count_rows(env, table) == 0, table
+
+
+def test_422_null_pk_rejected_in_both_modes_nothing_written(client, env):
+    # A NULL INTEGER PRIMARY KEY auto-assigns a FRESH id in SQLite: every
+    # re-POST would insert another row (idempotency silently broken) and a
+    # snapshot POST would insert a new row each time. Explicit non-NULL pk
+    # or 422 — both modes, pre-validation, nothing written.
+    r = post_rows(client, "spread_ticks", "append", [spread_row(id=None)])
+    assert r.status_code == 422
+    assert "primary key" in r.json()["detail"]      # fixed 422 body style
+    assert count_rows(env, "spread_ticks") == 0
+    for table, maker, pk in (
+        ("oracle_reputation", rep_row, {"id": None}),
+        ("oracle_reference", ref_row, {"underlying_ticker": None}),
+        ("collector_meta", meta_row, {"key": None}),
+    ):
+        r = post_rows(client, table, "snapshot", [maker(**pk)])
+        assert r.status_code == 422, table
+        assert count_rows(env, table) == 0, table
+    # sanity: the same shapes with explicit non-NULL pks still land
+    assert post_rows(client, "spread_ticks", "append",
+                     [spread_row(id=1)]).status_code == 200
+    assert post_rows(client, "oracle_reference", "snapshot",
+                     [ref_row()]).status_code == 200
+
+
+def test_422_missing_pk_rejected_in_both_modes_nothing_written(client, env):
+    cases = (
+        ("spread_ticks", "append", spread_row, "id"),
+        ("oracle_reputation", "snapshot", rep_row, "id"),
+        ("oracle_reference", "snapshot", ref_row, "underlying_ticker"),
+        ("collector_meta", "snapshot", meta_row, "key"),
+    )
+    for table, mode, maker, pk in cases:
+        row = maker()
+        del row[pk]
+        r = post_rows(client, table, mode, [row])
+        assert r.status_code == 422, table
+        assert "primary key" in r.json()["detail"], table  # fixed 422 body style
+        assert count_rows(env, table) == 0, table
 
 
 def test_invalid_json_body_422(client, env):

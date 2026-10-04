@@ -202,3 +202,58 @@ def test_mount_does_not_disturb_existing_dashboard_surface(client, empty_env):
     assert client.get("/").status_code == 200
     paths = {getattr(r, "path", None) for r in dashboard.app.routes}
     assert {"/", "/frag/gaps", "/frag/cross", "/frag/oraculo", "/frag/sistema"} <= paths
+
+
+# -------- B2/N7: an ingest import/mount failure must NEVER kill the boot ----
+
+class _BoomRouter:
+    """Any attribute access raises — a stand-in for a broken ingest router."""
+
+    def __getattr__(self, name):
+        raise RuntimeError("simulated ingest mount failure")
+
+
+@pytest.mark.parametrize("failure", ["import", "mount"])
+def test_dashboard_boots_and_serves_when_ingest_import_or_mount_raises(
+        failure, caplog):
+    """N7 regression pin (plan v4 Task 4): the guarded ingest import+mount
+    must NEVER crash the live dashboard. When it fails the app still boots,
+    non-ingest routes serve, /ingest/* is simply absent, and the failure is
+    logged LOUDLY ('ingest router UNAVAILABLE: <err>') — never swallowed
+    silently. After the test the fully-mounted app is restored."""
+    import builtins
+    import importlib
+
+    real_import = builtins.__import__
+    real_router = ingest.router
+    expected_err = f"simulated ingest {failure} failure"
+
+    def boom_import(name, globals=None, locals=None, fromlist=(), level=0):
+        # `from . import ingest` compiles to __import__('', fromlist=('ingest',), 1)
+        if name == "stockgap.ingest" or (level == 1 and "ingest" in (fromlist or ())):
+            raise ImportError(expected_err)
+        return real_import(name, globals, locals, fromlist, level)
+
+    try:
+        if failure == "import":
+            builtins.__import__ = boom_import
+        else:
+            ingest.router = _BoomRouter()
+        importlib.reload(dashboard)  # red phase: this raises — boot crash
+        paths = {getattr(r, "path", None) for r in dashboard.app.routes}
+        assert "/ingest/rows" not in paths, "/ingest/* must be absent"
+        assert "/ingest/state" not in paths, "/ingest/* must be absent"
+        c = TestClient(dashboard.app)
+        assert c.get("/").status_code == 200          # non-ingest route serves
+        assert c.get("/ingest/rows").status_code == 404
+        assert c.get("/ingest/state").status_code == 404
+        assert "ingest router UNAVAILABLE" in caplog.text  # loud log line
+        assert expected_err in caplog.text            # failure NAMED, not swallowed
+    finally:
+        builtins.__import__ = real_import
+        ingest.router = real_router
+        importlib.reload(dashboard)  # restore the fully-mounted app
+
+    # happy path intact for the rest of the suite
+    paths = {getattr(r, "path", None) for r in dashboard.app.routes}
+    assert "/ingest/rows" in paths and "/ingest/state" in paths

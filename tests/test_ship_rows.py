@@ -858,6 +858,97 @@ def test_docstring_states_ordering_assumption():
     assert "flock" in doc                   # the ONLY lock in the system [N6]
 
 
+# ------------------------ redirects + secrets hygiene ----------------------
+
+@pytest.mark.parametrize("method", ["GET", "POST"])
+def test_redirect_is_fatal_unexpected_redirect_and_never_followed(method):
+    """A 3xx must NEVER be followed: urllib's default redirect handler copies
+    the request headers — INCLUDING the Authorization header — to the
+    redirect target (301/302/303 are followed on GET and POST), i.e. the
+    ingest token would leak to whatever Location points at. Policy (documented
+    in the module docstring): 3xx = FATAL 'unexpected redirect' — nothing is
+    followed (the target is never contacted), no retry. GET covers the
+    preflight (/ingest/state), POST the row batches."""
+    import http.server
+    import threading
+
+    hits = {"capture": 0, "rows": 0}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def _handle(self):
+            if self.path == "/capture":
+                hits["capture"] += 1
+                self.send_response(200)
+                self.end_headers()
+                return
+            hits["rows"] += 1
+            self.send_response(302)
+            self.send_header(
+                "Location",
+                f"http://127.0.0.1:{self.server.server_port}/capture")
+            self.end_headers()
+
+        do_GET = do_POST = _handle
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    delays = []
+    real_sleep = ship_rows._sleep
+    ship_rows._sleep = delays.append
+    try:
+        base = f"http://127.0.0.1:{srv.server_port}"
+        cfg = ship_rows.Config(
+            url=base, token=TOKEN, db_path=Path("unused"), batch=500,
+            backfill_hours=4.0, backfill_from_id=None,
+            force=False, dry_run=False, budget_s=50.0)
+        payload = b"{}" if method == "POST" else None
+        with pytest.raises(ship_rows.ShipError) as exc:
+            ship_rows._request_retried(cfg, method, base + "/ingest/state", payload)
+        assert exc.value.code == ship_rows.EXIT_HTTP
+        assert "redirect" in str(exc.value).lower()  # 'unexpected redirect'
+        assert delays == []                          # FATAL: never retried
+        assert hits == {"rows": 1, "capture": 0}     # never followed: no leak
+        assert "redirect" in (ship_rows.__doc__ or "").lower()  # policy documented
+    finally:
+        ship_rows._sleep = real_sleep
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_ingest_env_loose_permissions_warn_once_never_values(
+        tmp_path, monkeypatch, caplog):
+    """config/ingest.env holds the ingest token: group/other bits on the file
+    get ONE loud warning naming the chmod 600 fix (non-fatal) — and the
+    file's VALUES are never logged. A 600 file is silent."""
+    for key in ship_rows.KNOWN_KEYS:
+        monkeypatch.delenv(key, raising=False)
+    secret = "sekret-" + "x" * 40
+    env_file = tmp_path / "ingest.env"
+    env_file.write_text(
+        "STOCKGAP_INGEST_URL=https://file.example\n"
+        f"STOCKGAP_INGEST_TOKEN={secret}\n")
+    env_file.chmod(0o644)  # group/world-readable
+    caplog.set_level(logging.WARNING)
+
+    cfg = ship_rows.load_config(env_file)  # the warning is NON-fatal
+    assert cfg.token == secret
+
+    warns = [r.getMessage() for r in caplog.records
+             if r.levelno >= logging.WARNING]
+    chmod_warns = [m for m in warns if "chmod 600" in m]
+    assert len(chmod_warns) == 1                  # exactly ONE loud line
+    assert str(env_file) in chmod_warns[0]        # names the file to fix
+    assert secret not in "\n".join(warns)         # never the file's values
+
+    caplog.clear()
+    env_file.chmod(0o600)                         # owner-only: silent
+    ship_rows.load_config(env_file)
+    assert not [r for r in caplog.records if "chmod 600" in r.getMessage()]
+
+
 def test_ship_log_covered_by_rotate_data_patterns(tmp_path, monkeypatch):
     # the crontab line appends to data/ship.log (Task 7) — rotate_data.py's
     # data/*.log patterns must pick it up for rotation/pruning [R10].

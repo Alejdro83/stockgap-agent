@@ -8,6 +8,7 @@ Run:  python3 scripts/dashboard.py     (restart one-liner: see DX-LOG.md)
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sqlite3
 import time
@@ -18,7 +19,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from . import db, ingest, mcp_server, telemetry
+from . import db, mcp_server, telemetry
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB = REPO_ROOT / "data" / "spread_ticks.db"
@@ -50,7 +51,19 @@ telemetry.init_sentry("stockgap-dashboard", fastapi=True)
 
 app = FastAPI(title="StockGap Dashboard")
 app.include_router(mcp_server.router)  # POST /mcp (MCP + pay-per-call gate)
-app.include_router(ingest.router)  # POST /ingest/rows + GET /ingest/state (token-gated)
+
+# N7 (plan v4 Task 4): an ingest import/mount failure must NEVER crash the
+# live dashboard — ingest pulls collector + oracle into this process and any
+# of those can break independently of the dashboard itself. Loud log NAMING
+# the failure (traceback kept — never swallowed silently); /ingest/* is then
+# simply absent and everything else keeps serving.
+try:
+    from . import ingest
+    app.include_router(ingest.router)  # POST /ingest/rows + GET /ingest/state (token-gated)
+except Exception as exc:  # deliberate: dashboard availability > ingest availability
+    logging.getLogger("stockgap.dashboard").error(
+        "ingest router UNAVAILABLE: %s (/ingest/* absent — the dashboard "
+        "serves everything else)", exc, exc_info=True)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 

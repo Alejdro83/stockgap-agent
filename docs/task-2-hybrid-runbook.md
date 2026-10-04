@@ -30,6 +30,7 @@ chmod 600 config/ingest.env
 ```
 
 Rules (enforced by the code where enforceable):
+- `STOCKGAP_INGEST_URL` must be an `https://` URL — the token rides every request as a `Bearer` header (token on the wire).
 - `config/ingest.env` is **gitignored** (`.gitignore` line: `config/ingest.env`) — **NEVER commit it, NEVER paste the token into chat, tickets or logs.**
 - The token is **NEVER passed via argv** — `scripts/ship_rows.py` refuses ANY argv except `--reset` (a token in argv would be visible in `ps` and `crontab -l`) and never logs the value. Real environment variables override the file values (`STOCKGAP_INGEST_URL`, `STOCKGAP_INGEST_TOKEN`, `STOCKGAP_DB`, `SHIP_*`).
 - The same value must exist on both sides: local `config/ingest.env` **and** the NF secret (STEP 2).
@@ -37,6 +38,8 @@ Rules (enforced by the code where enforceable):
 ### STEP 2 — "LINK-NF-SECRET" (owner, Northflank — BEFORE the pod starts)
 
 Create the Northflank secret **`STOCKGAP_INGEST_TOKEN`** with the exact same value as `config/ingest.env` and **link it to the StockGap service BEFORE the container starts**.
+
+**Also set the runtime env var `STOCKGAP_MODE=dashboard` on the StockGap service (service → variables), BEFORE the deploy.** The Dockerfile does **not** set it, so an unset variable means `full` mode: the pod would run the in-container collector/oracle/alerts loops (a second DB writer — the exact lineage collision this cutover exists to prevent) and skip the token preflight entirely. Unset ≠ dashboard — set it explicitly.
 
 > **KNOWN PITFALL (recorded deliberately):** Northflank injects secrets into a container **at start**. A secret linked to an already-running service is invisible to it — **a restart is needed**. And if the token is missing/weak at start, `scripts/deploy/preflight_ingest.py` fail-closes the pod: startup aborts before anything serves (one clear stderr line, the value never printed). If the token is simply not linked while the pod runs, `POST /ingest/rows` answers **503 "ingest disabled"** and the shipper exits with code 5 telling you the token is not linked on NF.
 
@@ -46,7 +49,7 @@ Valid = present, **≥ 32 chars**, printable ASCII **33–126** only (no whitesp
 
 - The OWNER (Alex) alone runs `git push` and owns the Northflank deploy. **The implementer never pushes.**
 - Deploy **before** the first ship: if the NF schema lags the local one, the ingest endpoint answers `422 "NF schema older than local — deploy first"` (hard fatal in the shipper, by design).
-- After the deploy, confirm the NF pod runs with **`STOCKGAP_MODE=dashboard`** (the entrypoint keeps the dashboard, rotation and the collector-log tail; the fetch loops — collector/watchdog, oracle, alerts — are off). Unset/`full` is the pre-hybrid behavior, exactly.
+- **Verify `STOCKGAP_MODE` from the container log** (STEP 2 set it; here you prove it reached the pod): the pod must log `MODE=dashboard: fetch loops disabled (hybrid: data arrives via /ingest)`. If it logs the full-mode line instead (`all processes started (dashboard + collector + watchdog + oracle + alerts + collector-log tail)`), **STOP — do not ship**: `STOCKGAP_MODE=dashboard` is not set on the service. Set it (STEP 2), restart/redeploy, and re-check the log line before anything ships. Unset/`full` is the pre-hybrid behavior, exactly — and that is **not** a dashboard pod.
 
 ---
 
@@ -55,6 +58,8 @@ Valid = present, **≥ 32 chars**, printable ASCII **33–126** only (no whitesp
 ### STEP 4 — "ARCHIVE-THE-NF-DB" (all three SQLite files)
 
 **Why this is mandatory, not hygiene:** the strict fresh-start preflight REFUSES to ship into any non-empty append table, and §6 documents the lineage case **no preflight can detect**. Archiving the NF DB is the only step that actually guarantees a clean NF side. Do it **before** the first ship — never as cleanup after a REFUSE.
+
+- **Volume headroom first (before cutover):** `df -h /data` — the volume needs free space ≥ 2× the local DB size (the backfill+ship and the archived copies need headroom).
 
 1. **Stop the StockGap service on Northflank** (console → service → stop) so nothing can write while you archive.
 2. On the NF volume (`STOCKGAP_DB=/data/spread_ticks.db`, set in the Dockerfile — see `DEPLOY.md`), via `nf command-exec` or any shell with the volume mounted, archive **ALL THREE** SQLite files **together**:

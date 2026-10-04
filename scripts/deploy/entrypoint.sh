@@ -19,8 +19,10 @@
 # STOCKGAP_MODE=dashboard: the (b)/(c1)/(c2) fetch loops are DISABLED — a
 # dashboard-only container must not double-fire alerts or become a second DB
 # writer (hybrid: data arrives via POST /ingest). (a) dashboard, (d) tail and
-# (e) rotation run in BOTH modes. Unset (or any other value) = full = this
-# file's historical behavior, exactly.
+# (e) rotation run in BOTH modes. Unset = full = this file's historical
+# behavior, exactly. Any OTHER value (dashboard, or a typo like `dashbord`)
+# also = dashboard mode: only the literal `full` runs the fetch loops, so a
+# typo fails toward the safe side (preflight runs, loops stay off).
 #
 # Every loop logs to stdout (container logs) AND /data/logs/. SIGTERM/SIGINT
 # shut everything down cleanly and FAST (Northflank grace = 30 s):
