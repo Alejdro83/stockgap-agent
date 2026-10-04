@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
 from . import db  # noqa: E402 — shared WAL/busy_timeout connection factory
+from . import rotation  # noqa: E402 — JSONL mirror self-rotation (non-fatal)
 from .oracle import (  # noqa: E402 — shared reference cache + source labels
     DERIVED_REFERENCE_SOURCE,
     REFERENCE_SOURCE,
@@ -125,6 +126,7 @@ class SpreadCollector:
         reference_max_age_s: float = 1800.0,
         use_reference_cache: bool = True,
         max_consecutive_failures: int = MAX_CONSECUTIVE_FAILURES,
+        jsonl_max_bytes: int | None = None,
     ):
         self.db_path = str(db_path)
         self.jsonl_path = Path(jsonl_path)
@@ -139,6 +141,11 @@ class SpreadCollector:
         self.reference_max_age_s = reference_max_age_s
         self.use_reference_cache = use_reference_cache
         self.max_consecutive_failures = int(max_consecutive_failures)
+        # 1 MB floor for explicit values too (contract: the test in test_rotation);
+        # JSONL_MAX_MB env when not given (default 100 MB).
+        self.jsonl_max_bytes = (max(1024 * 1024, jsonl_max_bytes)
+                                if jsonl_max_bytes is not None
+                                else rotation.jsonl_max_bytes_from_env())
 
         # WAL + busy_timeout(10s) via the shared factory; assert WAL engaged.
         self._con = db.connect(self.db_path)
@@ -381,6 +388,7 @@ class SpreadCollector:
             )
 
         try:
+            rotation.maybe_rotate_jsonl(self.jsonl_path, self.jsonl_max_bytes)
             with self.jsonl_path.open("a", encoding="utf-8") as fh:
                 for r in spread_rows:
                     fh.write(json.dumps({"type": "spread_tick", "ts_utc": ts_utc, **r},

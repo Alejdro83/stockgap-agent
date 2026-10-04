@@ -149,3 +149,26 @@ def test_env_parsing_never_crashes_on_nan_inf(monkeypatch):
     assert rotation.jsonl_max_bytes_from_env() == 1 * 1024 * 1024
     monkeypatch.setenv("JSONL_MAX_MB", "7")
     assert rotation.jsonl_max_bytes_from_env() == 7 * 1024 * 1024
+
+
+def test_record_tick_triggers_rename_rotation(tmp_path):
+    """Tiny threshold: the tick still commits to SQLite and the JSONL renames."""
+    from tests.test_collector import UNIVERSE, PRICE_ROWS
+    from stockgap.collector import SpreadCollector
+
+    jsonl = tmp_path / "ticks.jsonl"
+    _fill(jsonl, 50)  # pre-existing oversized mirror
+    col = SpreadCollector(db_path=tmp_path / "db.sqlite", jsonl_path=jsonl,
+                          client=None)   # real __init__ kwargs confirmed: db_path, jsonl_path, client=None
+    col.jsonl_max_bytes = 10             # AFTER construction: bypass the 1 MB floor for this fixture
+    spread_rows, cross_rows = col.build_tick_rows(UNIVERSE, PRICE_ROWS, tick_id=1)  # exact shape of tests/test_collector.py:125 (method, not module fn)
+    col.record_tick("2026-01-01T00:00:00Z", 1, spread_rows, cross_rows)
+
+    import sqlite3
+    con = sqlite3.connect(tmp_path / "db.sqlite")
+    n = con.execute("SELECT COUNT(*) FROM spread_ticks").fetchone()[0]
+    con.close()
+    assert n == len(spread_rows) > 0            # SQLite committed (finding 2)
+    archs = rotation.find_archives(tmp_path / "ticks.jsonl")
+    assert len(archs) == 1 and archs[0].stat().st_size == 50
+    assert jsonl.exists() and jsonl.stat().st_size > 0  # fresh mirror, same tick
