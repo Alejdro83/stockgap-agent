@@ -7,7 +7,9 @@ unlink-failure healing to exactly one archive, prune gz-twin dedupe.
 Round 3 (Claude review of _move_to_archive/_fsync_dir): FileExistsError must
 never fall through to the rename fallback (no-clobber regression), dir fsync is
 best-effort on EINVAL/ENOTSUP mounts (else gzip_pending re-gzips forever), and
-the heal-path (d) cleanup must not be skippable by a racing exists() probe."""
+the heal-path (d) cleanup runs only while the source is PROVEN alive — never
+skippable when the source survives, never run when survival is undeterminable
+(review-rotation-r2 round 3: a lone dst IS the archive)."""
 import errno
 import gzip
 import math
@@ -262,6 +264,46 @@ def test_move_to_archive_heal_cleanup_not_skipped_by_exists_race(tmp_path, monke
     assert state["probed"]                      # the racing probe really fired
     assert not real_exists(dst)                 # (d) cleanup ran — no full-size twin
     assert p.read_bytes() == b"x" * 100         # source intact
+
+
+def test_move_to_archive_eio_after_unlink_land_keeps_dst_when_probes_die(tmp_path, monkeypatch):
+    """EIO-after-unlink DATA-LOSS regression (review-rotation-r2 round 3):
+    ``path.unlink()`` raises EIO but the unlink LANDED and every survival probe
+    on the source dies too — a persistent stat EIO makes both ``Path.exists()``
+    (3.11 swallows only ENOENT/ENOTDIR/EBADF/ELOOP) and ``os.lstat`` raise.
+    Survival is UNDETERMINABLE and ``dst`` may be the ONLY archive left: the
+    heal cleanup must NOT delete it (a lone ``dst`` IS the archive — a duplicate
+    twin is recoverable, a lost archive is not) and the call must still raise —
+    never silently succeed. The old ``except OSError: surviving = True`` deleted
+    ``dst`` here = permanent data loss."""
+    p = tmp_path / "ticks.jsonl"
+    _fill(p, 100)
+    dst = tmp_path / "ticks-20260101T000000Z.jsonl"
+    real_exists, real_lstat, real_unlink = Path.exists, os.lstat, Path.unlink
+
+    def eio_unlink(self, *a, **k):
+        if self.name == p.name:                 # the source unlink...
+            real_unlink(self, *a, **k)          # ...LANDS...
+            raise OSError(errno.EIO, "i/o error")   # ...but reports EIO
+        return real_unlink(self, *a, **k)
+
+    def dead_lstat(target, *a, **k):            # persistent stat error on the source
+        if Path(os.fspath(target)) == p:
+            raise OSError(errno.EIO, "i/o error")
+        return real_lstat(target, *a, **k)
+
+    def dead_exists(self, *a, **k):
+        if self == p:
+            raise OSError(errno.EIO, "i/o error")
+        return real_exists(self, *a, **k)
+
+    monkeypatch.setattr(Path, "exists", dead_exists)
+    monkeypatch.setattr(os, "lstat", dead_lstat)
+    monkeypatch.setattr(Path, "unlink", eio_unlink)
+    with pytest.raises(OSError):                # never silent success
+        rotation._move_to_archive(p, dst)
+    assert dst.read_bytes() == b"x" * 100       # dst SURVIVES with its original content
+    assert not real_exists(p)                   # interleaving sanity: the unlink really landed
 
 
 def test_gzip_pending_preserves_content(tmp_path):

@@ -128,12 +128,16 @@ def _move_to_archive(path: Path, dst: Path) -> None:
         files; between same-inode hardlinks it is a POSIX no-op (verified on
         this kernel), so drop the redundant ``dst`` twin and repeat the rename
         — the end state is exactly one archive name.
-    (d) Anything still failing: best-effort ``dst.unlink()`` (only while the
-        source survives — a lone ``dst`` IS the archive) before re-raising, so
-        the next tick cannot accumulate full-size duplicate archives. The
-        survival probes are wrapped: a racing ``exists()`` error must never
-        skip this cleanup (round-3 review) — an undeterminable state cleans up
-        (a stray twin is self-healing; a silent full-size duplicate is not).
+    (d) Anything still failing: drop the redundant ``dst`` twin ONLY while the
+        source is PROVEN alive (a lone ``dst`` IS the archive), then re-raise,
+        so the next tick cannot accumulate full-size duplicate archives.
+        Survival is decided WITHOUT ``exists()``: ``os.lstat`` caught for
+        ``FileNotFoundError`` only (review-rotation-r2 round 3) — the old broad
+        ``except OSError`` swallowed every probe error into ``surviving =
+        True``, so an unlink that raised EIO but LANDED plus dead stat probes
+        (persistent stat EIO) deleted ``dst`` = the only archive (data loss).
+        Undeterminable survival now skips the cleanup and propagates: the worst
+        outcome is a duplicate twin, never a lost archive.
     """
     try:
         os.link(path, dst)                     # (a) atomic create-if-absent
@@ -154,15 +158,20 @@ def _move_to_archive(path: Path, dst: Path) -> None:
                 os.rename(path, dst)
         except OSError:
             try:
-                surviving = path.exists()      # wrapped probe: an error here must NOT skip (d)
-            except OSError:
-                surviving = True               # undeterminable: never leave a possible full-size duplicate
+                os.lstat(path)                 # (d) narrow survival probe (review-rotation-r2):
+                surviving = True               # lstat decides survival, caught
+            except FileNotFoundError:          # FileNotFoundError-only — no probe error
+                surviving = False              # is swallowed into a delete decision.
+            # Any OTHER probe error (e.g. persistent stat EIO) escapes uncaught:
+            # survival is undeterminable — the cleanup below is skipped and the
+            # error propagates. A duplicate twin is recoverable; a lost archive
+            # is not (the unlink may have LANDED, making dst the only archive).
             if surviving:
                 try:
-                    dst.unlink()               # (d) never leave a full-size duplicate behind
+                    dst.unlink()               # source PROVEN alive: drop the redundant twin
                 except OSError:
                     pass
-            raise
+            raise                              # always re-raise — never silent success
 
 def maybe_rotate_jsonl(path: Path, max_bytes: int) -> bool:
     """Rename the live JSONL to a unique archive at ``max_bytes``.
