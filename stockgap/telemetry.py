@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
+from typing import Any
 
 log = logging.getLogger("stockgap.telemetry")
 
@@ -41,6 +42,25 @@ def resolve_dsn() -> str | None:
         pass
     return None
 
+
+def scrub_pii(event: Any, hint: Any = None) -> Any:
+    """``before_send`` scrub: request bodies and Authorization are NEVER captured.
+
+    Hard requirement for the internet-facing ``/ingest/*`` endpoints [R3];
+    applied to every event (stricter is free): the request body and the
+    Authorization header are stripped from the event's request context and
+    everything else is left untouched.
+    """
+    request = event.get("request") if isinstance(event, dict) else None
+    if isinstance(request, dict):
+        request.pop("data", None)
+        request.pop("body", None)
+        headers = request.get("headers")
+        if isinstance(headers, dict):
+            for key in list(headers):
+                if key.lower() == "authorization":
+                    del headers[key]
+    return event
 
 def init_sentry(service: str, *, fastapi: bool = False) -> bool:
     """Initialize Sentry iff a DSN resolves. True == initialized, False == no-op.
@@ -70,6 +90,12 @@ def init_sentry(service: str, *, fastapi: bool = False) -> bool:
             dsn=dsn,
             integrations=integrations,
             traces_sample_rate=float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.0")),
+            # Ingest hardening (hybrid plan Task 1 [R3]): no PII by default,
+            # never buffer request bodies, and scrub bodies/Authorization in
+            # before_send as belt and braces.
+            send_default_pii=False,
+            max_request_body_size="never",
+            before_send=scrub_pii,
         )
         sentry_sdk.set_tag("service", service)
     except Exception as exc:  # noqa: BLE001 — observability must never break the app

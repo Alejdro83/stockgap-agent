@@ -35,7 +35,7 @@ from .oracle import (  # noqa: E402 — shared reference cache + source labels
 )
 from .spread import cross_issuer_spreads, gross_spread, real_spread
 
-__all__ = ["SpreadCollector", "iso_now"]
+__all__ = ["SpreadCollector", "iso_now", "migrate_schema"]
 
 log = logging.getLogger("stockgap.collector")
 
@@ -110,6 +110,40 @@ def iso_now() -> str:
     now = datetime.now(timezone.utc)
     return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
 
+def migrate_schema(con: sqlite3.Connection) -> None:
+    """Add provenance columns to DBs created before source tracking existed.
+
+    Extracted from ``SpreadCollector._migrate`` (hybrid plan Task 1) so the
+    ingest endpoint can heal the NF-side DB too. Idempotent: every ALTER is
+    gated by a ``PRAGMA table_info`` column probe. NEVER drop/rename existing
+    columns (dashboard relies on the old schema).
+    """
+    for table in ("spread_ticks", "cross_issuer_ticks"):
+        cols = {r[1] for r in con.execute(f"PRAGMA table_info({table})")}
+        if "source_endpoint" not in cols:
+            con.execute(f"ALTER TABLE {table} ADD COLUMN source_endpoint TEXT")
+        if "fetched_at" not in cols:
+            con.execute(f"ALTER TABLE {table} ADD COLUMN fetched_at TEXT")
+
+    # Real-metric columns (2026-10-02): spread vs the INDEPENDENT underlying
+    # close. Historical rows cannot be backfilled (the independent close was
+    # never fetched) — label them honestly as 'derived' instead of leaving
+    # them ambiguous.
+    cols = {r[1] for r in con.execute("PRAGMA table_info(spread_ticks)")}
+    for col in (
+        "spread_bps_real",
+        "reference_close_independent",
+        "reference_source",
+        "reference_kind",
+    ):
+        if col not in cols:
+            con.execute(f"ALTER TABLE spread_ticks ADD COLUMN {col} TEXT")
+    con.execute(
+        "UPDATE spread_ticks SET reference_kind = 'derived',"
+        " reference_source = ? WHERE reference_kind IS NULL",
+        (DERIVED_REFERENCE_SOURCE,),
+    )
+
 
 class SpreadCollector:
     """Records spread ticks 24/7 into SQLite + JSONL."""
@@ -151,7 +185,7 @@ class SpreadCollector:
         self._con = db.connect(self.db_path)
         db.ensure_wal(self._con)
         self._con.executescript(SCHEMA)
-        self._migrate()
+        migrate_schema(self._con)
         self._con.commit()
 
         row = self._con.execute("SELECT MAX(tick_id) FROM spread_ticks").fetchone()
@@ -533,35 +567,6 @@ class SpreadCollector:
                 return
             elapsed = time.time() - started
             time.sleep(max(1.0, self.tick_interval - elapsed))
-
-    def _migrate(self) -> None:
-        """Add provenance columns to DBs created before source tracking existed."""
-        for table in ("spread_ticks", "cross_issuer_ticks"):
-            cols = {r[1] for r in self._con.execute(f"PRAGMA table_info({table})")}
-            if "source_endpoint" not in cols:
-                self._con.execute(f"ALTER TABLE {table} ADD COLUMN source_endpoint TEXT")
-            if "fetched_at" not in cols:
-                self._con.execute(f"ALTER TABLE {table} ADD COLUMN fetched_at TEXT")
-
-        # Real-metric columns (2026-10-02): spread vs the INDEPENDENT underlying
-        # close. Historical rows cannot be backfilled (the independent close was
-        # never fetched) — label them honestly as 'derived' instead of leaving
-        # them ambiguous. NEVER drop/rename existing columns (dashboard relies
-        # on the old schema).
-        cols = {r[1] for r in self._con.execute("PRAGMA table_info(spread_ticks)")}
-        for col in (
-            "spread_bps_real",
-            "reference_close_independent",
-            "reference_source",
-            "reference_kind",
-        ):
-            if col not in cols:
-                self._con.execute(f"ALTER TABLE spread_ticks ADD COLUMN {col} TEXT")
-        self._con.execute(
-            "UPDATE spread_ticks SET reference_kind = 'derived',"
-            " reference_source = ? WHERE reference_kind IS NULL",
-            (DERIVED_REFERENCE_SOURCE,),
-        )
 
     def _meta_set(self, key: str, value: Any) -> None:
         """Collector_meta bookkeeping: GUARDED, never raises.
