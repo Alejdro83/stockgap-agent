@@ -18,7 +18,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from . import db, mcp_server, telemetry
+from . import db, ingest, mcp_server, telemetry
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB = REPO_ROOT / "data" / "spread_ticks.db"
@@ -50,6 +50,7 @@ telemetry.init_sentry("stockgap-dashboard", fastapi=True)
 
 app = FastAPI(title="StockGap Dashboard")
 app.include_router(mcp_server.router)  # POST /mcp (MCP + pay-per-call gate)
+app.include_router(ingest.router)  # POST /ingest/rows + GET /ingest/state (token-gated)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 

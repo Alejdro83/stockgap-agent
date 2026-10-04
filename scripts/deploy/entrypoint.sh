@@ -198,6 +198,18 @@ shutdown() {
 }
 trap shutdown TERM INT
 
+# --- ingest preflight: dashboard mode ONLY, fail closed before serving -------
+# Hybrid: dashboard-mode containers receive rows via POST /ingest/rows behind
+# STOCKGAP_INGEST_TOKEN, so a missing/weak token must abort the deploy BEFORE
+# anything serves. The script prints the one clear stderr line itself (never
+# the value); we just propagate the non-zero exit. The full/default path is
+# byte-identical: the then-branch is deliberately a no-op.
+if [ "${STOCKGAP_MODE:-full}" = "full" ]; then
+    true
+else
+    python3 scripts/deploy/preflight_ingest.py || exit 1
+fi
+
 # (a) dashboard — restarted on ANY exit (clean or crash). The old
 #     `python3 ... && break` made a single clean exit permanent death; now
 #     only shutdown() (which TERMs the wrapper) ends the loop. The dashboard

@@ -48,6 +48,8 @@ LOOP_NEEDLES = (
 )
 ROTATION_NEEDLE = "python3 scripts/rotate_data.py"   # (e) — kept OUTSIDE
 TAIL_NEEDLE = "tail -n 0 -F"                         # (d) — kept OUTSIDE
+PREFLIGHT_NEEDLE = "python3 scripts/deploy/preflight_ingest.py"  # Task 4
+DASHBOARD_SPAWN_NEEDLE = "python3 scripts/dashboard.py"          # what serves
 
 DASHBOARD_LOG = "MODE=dashboard: fetch loops disabled (hybrid: data arrives via /ingest)"
 FULL_START_LOG = (
@@ -188,6 +190,32 @@ def test_dashboard_mode_logs_the_mode_and_never_claims_collector(blocks):
     assert "collector + watchdog" not in else_all
 
 
+def test_preflight_runs_only_in_the_dashboard_branch(code_lines, blocks):
+    """Task 4: the fail-closed ingest preflight is dashboard-mode ONLY — it
+    must sit in the else-branch (= not full) of the STOCKGAP_MODE guard and
+    never run on the full/default path (compat pin: byte-identical)."""
+    assert blocks, "STOCKGAP_MODE guard missing"
+    hits = _where(code_lines, blocks, PREFLIGHT_NEEDLE)
+    assert hits, "preflight_ingest call missing from entrypoint"
+    outside = [l for where, l in hits if where != "else"]
+    assert not outside, (
+        f"preflight must run ONLY in the dashboard branch (guard else), "
+        f"found elsewhere: {outside}"
+    )
+
+
+def test_preflight_runs_before_anything_serves(code_lines):
+    """'Before anything serves': the preflight call must appear BEFORE the
+    dashboard spawn line in the script."""
+    pre = [i for i, l in enumerate(code_lines) if PREFLIGHT_NEEDLE in l]
+    serve = [i for i, l in enumerate(code_lines) if DASHBOARD_SPAWN_NEEDLE in l]
+    assert pre, "preflight_ingest call missing from entrypoint"
+    assert serve, "dashboard spawn line missing from entrypoint"
+    assert min(pre) < min(serve), (
+        "preflight must run BEFORE the dashboard spawn (fail closed pre-serve)"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Behavioral variant: stub python3/bash on PATH, run the entrypoint ~3 s per
 # mode under timeout, and assert the loop commands never EXECUTE in dashboard
@@ -203,9 +231,17 @@ STUB_BASH = """#!/bin/sh
 echo "bash $*" >> "$STUB_CALLS"
 exit 0
 """
+# Task 4: same stub but the preflight itself FAILS (weak/missing token stand-in).
+STUB_PY3_FAIL_PREFLIGHT = """#!/bin/sh
+echo "python3 $*" >> "$STUB_CALLS"
+case "$*" in
+    *preflight_ingest.py*) exit 1 ;;
+esac
+exit 0
+"""
 
 
-def run_entrypoint(tmp_path: Path, mode):
+def run_entrypoint(tmp_path: Path, mode, stub_py3=STUB_PY3, expect_rc=None):
     repo = tmp_path / "repo"
     (repo / "data").mkdir(parents=True)
     data = tmp_path / "volume"
@@ -225,7 +261,7 @@ def run_entrypoint(tmp_path: Path, mode):
 
     stub_bin = tmp_path / "bin"
     stub_bin.mkdir()
-    for name, body in (("python3", STUB_PY3), ("bash", STUB_BASH)):
+    for name, body in (("python3", stub_py3), ("bash", STUB_BASH)):
         p = stub_bin / name
         p.write_text(body)
         p.chmod(0o755)
@@ -246,7 +282,8 @@ def run_entrypoint(tmp_path: Path, mode):
         capture_output=True,
         text=True,
     )
-    assert proc.returncode in (0, 124), (
+    allowed = (expect_rc,) if expect_rc is not None else (0, 124)
+    assert proc.returncode in allowed, (
         f"entrypoint rc={proc.returncode}\nstdout:\n{proc.stdout}\n"
         f"stderr:\n{proc.stderr}"
     )
@@ -280,3 +317,31 @@ def test_behavior_dashboard_mode_never_executes_loops_but_rotation_runs(tmp_path
     assert "python3 scripts/alerts.py" not in calls
     assert "python3 scripts/rotate_data.py" in calls, "rotation must run in dashboard mode"
     assert "python3 scripts/dashboard.py" in calls, "the dashboard itself must run"
+
+
+# ---------------- Task 4: preflight wiring, behavioral pins -----------------
+
+def test_behavior_default_mode_never_calls_the_preflight(tmp_path):
+    """Full/default path stays byte-identical: the preflight never runs there."""
+    calls = "\n".join(run_entrypoint(tmp_path, None))
+    assert "preflight_ingest.py" not in calls
+
+
+def test_behavior_dashboard_mode_preflight_runs_before_the_dashboard(tmp_path):
+    """In dashboard mode the preflight EXECUTES, and its call is logged before
+    the dashboard spawn (fail closed before serving)."""
+    calls = run_entrypoint(tmp_path, "dashboard")
+    assert PREFLIGHT_NEEDLE in calls, "dashboard mode must run the preflight"
+    assert calls.index(PREFLIGHT_NEEDLE) < calls.index(DASHBOARD_SPAWN_NEEDLE)
+
+
+def test_behavior_preflight_failure_aborts_before_anything_serves(tmp_path):
+    """Weak/missing token at deploy time: the entrypoint exits non-zero and
+    NOTHING serves (no dashboard, no rotation, no tails)."""
+    calls = run_entrypoint(
+        tmp_path, "dashboard", stub_py3=STUB_PY3_FAIL_PREFLIGHT, expect_rc=1
+    )
+    assert PREFLIGHT_NEEDLE in calls, "the preflight must have been attempted"
+    joined = "\n".join(calls)
+    assert DASHBOARD_SPAWN_NEEDLE not in joined, "must NOT serve after a failed preflight"
+    assert "python3 scripts/rotate_data.py" not in joined
