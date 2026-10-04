@@ -16,6 +16,12 @@
 #       niced 19): prune retention first, gzip pending JSONL archives
 #       (crash-safe .gz.tmp then replace), copytruncate oversized logs
 #
+# STOCKGAP_MODE=dashboard: the (b)/(c1)/(c2) fetch loops are DISABLED — a
+# dashboard-only container must not double-fire alerts or become a second DB
+# writer (hybrid: data arrives via POST /ingest). (a) dashboard, (d) tail and
+# (e) rotation run in BOTH modes. Unset (or any other value) = full = this
+# file's historical behavior, exactly.
+#
 # Every loop logs to stdout (container logs) AND /data/logs/. SIGTERM/SIGINT
 # shut everything down cleanly and FAST (Northflank grace = 30 s):
 #   - the collector (setsid'd and reparented to PID 1, so 'wait' can never
@@ -207,6 +213,12 @@ trap shutdown TERM INT
 ) > >(tee -a "$LOGS/dashboard.log") 2>&1 &
 PIDS+=($!)
 
+# --- fetch loops: full mode only (STOCKGAP_MODE guard) ---------------------
+# [ "${STOCKGAP_MODE:-full}" = "full" ] keeps (b) collector/watchdog, (c1)
+# oracle and (c2) alerts out of dashboard-only containers. Rotation (e) and
+# the collector-log tail (d) stay OUTSIDE this guard — useful in both modes.
+if [ "${STOCKGAP_MODE:-full}" = "full" ]; then
+
 # (b) collector — started ONCE through the pidfile-guarded watchdog script,
 #     then re-checked every 5 min exactly like the host */5 cron.
 bash scripts/ensure_collector.sh || log "WARN: initial ensure_collector.sh failed (watchdog will retry in 300s)"
@@ -240,6 +252,8 @@ PIDS+=($!)
 ) > >(tee -a "$LOGS/alerts-cron.log") 2>&1 &
 PIDS+=($!)
 
+fi
+
 # (e) data/log rotation — every 10 min under flock: prune retention first,
 #     gzip pending JSONL archives (renamed by the collector; crash-safe .tmp
 #     then replace), copytruncate oversized logs (tee -a/FileHandler/>> hold
@@ -261,5 +275,9 @@ touch "$DATA/collector.log"
 tail -n 0 -F "$DATA/collector.log" 2>/dev/null &
 PIDS+=($!)
 
-log "all processes started (dashboard + collector + watchdog + oracle + alerts + collector-log tail)"
+if [ "${STOCKGAP_MODE:-full}" = "full" ]; then
+    log "all processes started (dashboard + collector + watchdog + oracle + alerts + collector-log tail)"
+else
+    log "MODE=dashboard: fetch loops disabled (hybrid: data arrives via /ingest)"
+fi
 wait || true
