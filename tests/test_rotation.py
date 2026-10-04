@@ -1,10 +1,13 @@
 """Rotation primitives — no-clobber rename for per-tick appenders, copytruncate
 for O_APPEND held-fd writers. Findings 1-14 of the Claude review are covered
 where testable (crash-safe gzip, mixed-form prune, vacuous-glob fix, empty-file
-guard, keep clamps, NaN/inf env parsing)."""
+guard, keep clamps, NaN/inf env parsing). Diff-review round 2 (crash-safety):
+parent-dir fsync before the source drop, hardlink-less rename fallback +
+unlink-failure healing to exactly one archive, prune gz-twin dedupe."""
 import gzip
 import math
 import os
+import stat
 from pathlib import Path
 
 from stockgap import rotation
@@ -69,6 +72,22 @@ def test_prune_clamps_keep_below_one(tmp_path):
     assert len(list(tmp_path.iterdir())) >= 1
 
 
+def test_prune_dedupes_gz_twin_leftover_and_deletes_nothing(tmp_path):
+    """A crash between os.replace and the source unlink leaves x.jsonl next to
+    x.jsonl.gz with the SAME _age_key. prune must count the pair as ONE archive
+    (else it evicts one REAL archive early) and must leave the leftover in
+    place — find_archives still returns it so the gzip pass can heal the pair
+    (diff-review finding 4)."""
+    pair = "ticks-20260102T000000Z.jsonl"
+    (tmp_path / pair).write_text("x")
+    (tmp_path / (pair + ".gz")).write_text("x")
+    old = tmp_path / "ticks-20260101T000000Z.jsonl.gz"
+    old.write_text("y")
+    doomed = rotation.prune([tmp_path / pair, tmp_path / (pair + ".gz"), old], keep=2)
+    assert doomed == []                       # 2 REAL items + 1 twin, keep=2: nothing deleted
+    assert sorted(x.name for x in tmp_path.iterdir()) == sorted([pair, pair + ".gz", old.name])
+
+
 def test_maybe_rotate_jsonl_below_threshold_is_noop(tmp_path):
     p = tmp_path / "ticks.jsonl"
     _fill(p, 100)
@@ -88,6 +107,44 @@ def test_maybe_rotate_jsonl_renames_at_threshold(tmp_path):
 def test_maybe_rotate_jsonl_never_raises_on_oserror(tmp_path):
     missing = tmp_path / "nope" / "ticks.jsonl"
     assert rotation.maybe_rotate_jsonl(missing, max_bytes=1) is False  # no raise
+
+
+def test_maybe_rotate_jsonl_falls_back_to_rename_without_hardlinks(tmp_path, monkeypatch):
+    """Some FUSE/network mounts lack hardlinks (os.link raises): rotation must
+    still happen via rename — source gone, content preserved (diff-review 2)."""
+    p = tmp_path / "ticks.jsonl"
+    _fill(p, 100)
+
+    def nolink(*a, **k):
+        raise OSError("hardlinks unsupported")
+
+    monkeypatch.setattr(os, "link", nolink)
+    assert rotation.maybe_rotate_jsonl(p, max_bytes=100) is True
+    assert not p.exists()
+    archs = rotation.find_archives(p)
+    assert len(archs) == 1 and archs[0].read_bytes() == b"x" * 100
+
+
+def test_maybe_rotate_jsonl_heals_failed_unlink_to_exactly_one_archive(tmp_path, monkeypatch):
+    """link landed but the source unlink failed: HEAL to exactly ONE archive —
+    the live name gone and NO full-size duplicate left for the next tick to
+    pile up (diff-review 2c/2d)."""
+    p = tmp_path / "ticks.jsonl"
+    _fill(p, 100)
+    real_unlink = Path.unlink
+
+    def flaky_unlink(self, *a, **k):
+        if self.name == p.name:              # only the live file's unlink fails
+            raise OSError("unlink denied")
+        return real_unlink(self, *a, **k)
+
+    monkeypatch.setattr(Path, "unlink", flaky_unlink)
+    assert rotation.maybe_rotate_jsonl(p, max_bytes=100) is True
+    archs = rotation.find_archives(p)
+    assert len(archs) == 1                   # exactly one archive name...
+    assert sorted(x.name for x in tmp_path.iterdir()) == [archs[0].name]  # ...and the ONLY file left
+    assert archs[0].read_bytes() == b"x" * 100   # content preserved
+    assert not p.exists()
 
 
 def test_gzip_pending_preserves_content(tmp_path):
@@ -112,6 +169,36 @@ def test_gzip_pending_failure_keeps_source_and_cleans_tmp(tmp_path, monkeypatch)
     assert p.exists() and p.read_text() == "payload\n"
     assert not (tmp_path / (p.name + ".gz")).exists()
     assert not list(tmp_path.glob("*.gz.tmp"))
+
+
+def test_gzip_pending_fsyncs_parent_dir_after_replace_before_source_unlink(tmp_path, monkeypatch):
+    """Crash gap (diff-review 1): the archive rename must be made durable BEFORE
+    the source unlink — otherwise a host crash can persist the unlink but lose
+    the rename and take BOTH names (archive and source gone)."""
+    p = tmp_path / "ticks-20260101T000000Z.jsonl"
+    p.write_text("payload\n")
+    events = []
+    real_fsync, real_replace, real_unlink = os.fsync, os.replace, Path.unlink
+
+    def fsync(fd):
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            events.append("fsync-dir")
+        return real_fsync(fd)
+
+    def replace(src, dst):
+        events.append("replace")
+        return real_replace(src, dst)
+
+    def unlink(self, *a, **k):
+        events.append(f"unlink:{self.name}")
+        return real_unlink(self, *a, **k)
+
+    monkeypatch.setattr(os, "fsync", fsync)
+    monkeypatch.setattr(os, "replace", replace)
+    monkeypatch.setattr(Path, "unlink", unlink)
+    assert rotation.gzip_pending(p) is True
+    assert "fsync-dir" in events
+    assert events.index("replace") < events.index("fsync-dir") < events.index(f"unlink:{p.name}")
 
 
 def test_rotate_log_copytruncate_with_held_append_fd(tmp_path):
