@@ -7,18 +7,23 @@ Contract under test (plan 2026-10-04-hybrid-collector-sync-v3.md, Task 3):
 - self-lock via fcntl.flock on data/ship.lock — the ONLY lock in the system
   (the crontab line has NO flock wrapper); a second instance exits doing
   nothing.
-- watermark data/ship_meta.json: atomic tmp + fsync(file) + fsync(dir);
-  corrupt/missing = FATAL + explicit --reset (never silently 0); local
-  MAX(id) < watermark (DB restored/rebuilt) = loud refusal.
+- watermark data/ship_meta.json: BORN at pass start (atomic tmp +
+  fsync(file) + fsync(dir)) with the derived starting floor BEFORE the
+  first POST; advances to batch max id after EACH 2xx and never otherwise;
+  corrupt = FATAL + explicit --reset (never silently 0); local
+  MAX(id) < watermark (DB restored/rebuilt) = loud refusal. A MISSING
+  watermark therefore proves no POST ever happened.
 - bounded backfill: SHIP_BACKFILL_HOURS (default 4, band 2-6) per-table ts
   column or explicit SHIP_BACKFILL_FROM_ID; NEVER id 0 by default.
 - preflight (GET /ingest/state) ONLY when no valid watermark file exists:
-  mixed lineage (NF rows the local DB cannot account for) -> REFUSE
-  (precedence: REFUSE wins over any lineage inference — old-collector rows
-  can't be distinguished), cutover-runbook message, SHIP_FORCE=1 override;
-  same-lineage rule on the --reset/derive path (NF MAX(id) <= local MAX(id))
-  -> proceed. Watermark exists -> preflight SKIPPED (crash-resume must not
-  false-positive).
+  PLAIN fresh start is STRICT — ANY non-empty append table (NF MAX(id) > 0)
+  -> REFUSE with the cutover-runbook message (names --reset and
+  SHIP_FORCE=1), NO lineage inference whatsoever. Same-lineage inference
+  ONLY on the explicit --reset path: NF MAX(id) <= local MAX(id) on every
+  non-empty append table -> proceed with a LOUD warning
+  (indistinguishability caveat + runbook); --reset with NF MAX(id) >
+  local MAX(id) -> REFUSE which OVERRIDES SHIP_FORCE=1. Watermark exists
+  -> preflight SKIPPED (crash-resume must not false-positive).
 - drain loop: per pass, per append table, batches of SHIP_BATCH (default
   500) `WHERE id > watermark ORDER BY id` until drained or the ~50s budget;
   watermark -> batch max id after EACH 2xx (atomic save). Snapshot tables
@@ -327,13 +332,21 @@ def test_watermark_corrupt_is_fatal_reset_recovers(world, caplog):
     assert world.read_wm()["spread_ticks"] == 0
 
 
-def test_watermark_missing_is_fatal_never_silently_zero(world, caplog):
+def test_fresh_start_clean_nf_borns_watermark_and_proceeds(world, caplog):
+    # MISSING watermark + CLEAN NF = a TRUE fresh start: the watermark is
+    # BORN at pass start (before the first POST), so a missing file proves
+    # no POST ever happened and the strict preflight can clear a clean NF.
+    # (Re-maps the old "missing watermark is always fatal" test — that
+    # premise is gone with birth-at-pass-start + the strict fresh-start
+    # preflight. Corrupt watermark is still fatal: see the test above.)
     caplog.set_level(logging.INFO)
-    rc = ship_rows.main([])
-    assert rc != 0
-    assert "--reset" in caplog.text
-    assert world.fake.calls == []
-    assert not world.wm_path.exists()        # never silently created at 0
+    world.seed("spread_ticks", 3)
+
+    assert ship_rows.main([]) == 0                     # PLAIN fresh start
+    assert len(world.fake.state_gets()) == 1          # strict preflight consulted NF
+    assert [r["id"] for p in world.fake.posts()
+            for r in p["payload"]["rows"]] == [1, 2, 3]
+    assert world.read_wm()["spread_ticks"] == 3       # born at floor, advanced on 2xx
 
 
 def test_local_max_id_below_watermark_refused(world, caplog):
@@ -602,21 +615,71 @@ def test_preflight_refuses_mixed_lineage_only_without_watermark(world, caplog):
     assert world.fake.posts() == []
 
 
-def test_preflight_mixed_lineage_ship_force_override(world, caplog, monkeypatch):
+def test_fresh_start_nonempty_nf_low_maxima_still_refuses_no_inference(world, caplog):
+    # (b) THE HOLE regression: fresh start (no watermark file), NF NON-EMPTY
+    # with LOW maxima (NF MAX(id) <= local MAX(id)) — a PLAIN run must NEVER
+    # infer lineage: ANY non-empty append table on NF -> strict REFUSE, even
+    # though the maxima "look" same-lineage (old-collector rows with aligned
+    # maxima are INDISTINGUISHABLE — shipping would collide by id and
+    # INSERT OR IGNORE would silently drop the new rows).
     caplog.set_level(logging.INFO)
-    world.seed("spread_ticks", 2)
-    monkeypatch.setenv("SHIP_FORCE", "1")
-    world.fake.script = [(200, _state_doc(spread_ticks=100))]
+    world.seed("spread_ticks", 10)
+    world.fake.script = [(200, _state_doc(spread_ticks=5))]  # tempting: "same lineage"
+
+    rc = ship_rows.main([])                              # PLAIN — no --reset
+    assert rc == 3                                       # EXIT_PREFLIGHT
+    assert len(world.fake.state_gets()) == 1             # strict preflight consulted NF
+    assert world.fake.posts() == []                      # nothing shipped
+    assert not world.wm_path.exists()                    # no birth past a REFUSE
+    assert "--reset" in caplog.text                      # recovery named
+    assert "SHIP_FORCE" in caplog.text                   # override named
+    assert "spread_ticks.db-wal" in caplog.text          # runbook: archive ALL THREE files
+
+
+def test_reset_same_lineage_low_maxima_proceeds_with_loud_warning(world, caplog):
+    # (c) Same-lineage inference ONLY on the explicit --reset path: NF
+    # non-empty but NF MAX(id) <= local MAX(id) everywhere -> proceed with a
+    # LOUD warning carrying the indistinguishability caveat + runbook.
+    caplog.set_level(logging.INFO)
+    world.seed("spread_ticks", 10)
+    world.fake.script = [(200, _state_doc(spread_ticks=5))]  # same-lineage maxima
 
     assert ship_rows.main(["--reset"]) == 0
-    assert [r["id"] for p in world.fake.posts() for r in p["payload"]["rows"]] == [1, 2]
-    assert "SHIP_FORCE" in caplog.text           # loud override warning
+    warnings = [r.getMessage() for r in caplog.records
+                if r.levelno >= logging.WARNING]
+    assert any("distinguish" in m for m in warnings)     # indistinguishability caveat
+    assert any("runbook" in m.lower() for m in warnings) # runbook reference
+    assert [r["id"] for p in world.fake.posts()
+            for r in p["payload"]["rows"]] == list(range(1, 11))
+    assert world.read_wm()["spread_ticks"] == 10
 
 
-def test_crash_before_watermark_write_rerun_proceeds_and_reposts_idempotently(
+def test_reset_with_nf_max_above_local_max_refuses_even_ship_force(world, caplog,
+                                                                  monkeypatch):
+    # (d) --reset with NF MAX(id) > local MAX(id) -> REFUSE, and this REFUSE
+    # OVERRIDES SHIP_FORCE=1 (rows the local DB cannot account for).
+    caplog.set_level(logging.INFO)
+    world.seed("spread_ticks", 2)
+    monkeypatch.setenv("SHIP_FORCE", "1")                # must NOT help here
+    world.fake.script = [(200, _state_doc(spread_ticks=100))]
+
+    rc = ship_rows.main(["--reset"])
+    assert rc == 3                                       # EXIT_PREFLIGHT
+    assert len(world.fake.state_gets()) == 1
+    assert world.fake.posts() == []
+    assert not world.wm_path.exists()
+    assert "runbook" in caplog.text.lower()
+    assert "spread_ticks.db-wal" in caplog.text
+
+
+def test_crash_after_post_before_watermark_update_rerun_reposts_idempotently(
         world, monkeypatch):
-    # Pass 1 (--reset): batch1 POSTs and LANDS on NF, then the host dies
-    # BEFORE the watermark write — no ship_meta.json exists at all.
+    # (a) The watermark is BORN at pass start — BEFORE the first POST — so a
+    # crash after a POST but before the watermark UPDATE leaves a VALID
+    # watermark file behind: the plain re-run skips the preflight (no
+    # false-positive on this lineage's own rows) and re-POSTs the batch
+    # idempotently. This is the scenario the old crash-before-watermark-write
+    # test was really about.
     world.seed("spread_ticks", 1500)
     monkeypatch.setenv("SHIP_BATCH", "500")
 
@@ -625,24 +688,26 @@ def test_crash_before_watermark_write_rerun_proceeds_and_reposts_idempotently(
     def crash_after_first_post(cfg, table, mode, rows):
         real_post(cfg, table, mode, rows)
         if table == "spread_ticks" and rows[0]["id"] == 1:
-            raise KeyboardInterrupt  # kill: no finally/except handler runs
+            raise KeyboardInterrupt  # crash AFTER the POST, before the wm UPDATE
 
     monkeypatch.setattr(ship_rows, "_post_rows", crash_after_first_post)
     with pytest.raises(KeyboardInterrupt):
         ship_rows.main(["--reset"])
-    assert len(world.nf_rows("spread_ticks")) == 500   # the batch landed
-    assert not world.wm_path.exists()                 # crash-before-watermark-write
+    assert len(world.nf_rows("spread_ticks")) == 500     # the batch landed on NF
+    assert world.wm_path.exists()                        # BORN at pass start
+    assert world.read_wm()["spread_ticks"] == 0          # still at the derived floor
 
-    # Re-run (--reset, the documented recovery): preflight SEES the rows but
-    # the same-lineage rule (NF MAX(id) 500 <= local MAX(id) 1500) must NOT
-    # false-positive — proceed and re-POST idempotently.
+    # Plain re-run (no --reset): watermark exists -> preflight SKIPPED ->
+    # the crashed batch is re-POSTed idempotently (INSERT OR IGNORE).
     monkeypatch.setattr(ship_rows, "_post_rows", real_post)
-    assert ship_rows.main(["--reset"]) == 0
+    world.fake.calls.clear()
+    assert ship_rows.main([]) == 0
 
+    assert world.fake.state_gets() == []                 # preflight SKIPPED
     posts = world.fake.posts()
-    assert [r["id"] for p in posts[:2] for r in p["payload"]["rows"]] == \
-        list(range(1, 501)) + list(range(1, 501))     # the SAME batch re-POSTed
-    assert len(world.nf_rows("spread_ticks")) == 1500  # INSERT OR IGNORE: idempotent
+    assert [r["id"] for p in posts[:1] for r in p["payload"]["rows"]] == \
+        list(range(1, 501))                              # the SAME batch re-POSTed
+    assert len(world.nf_rows("spread_ticks")) == 1500     # idempotent replay
     assert world.read_wm()["spread_ticks"] == 1500
 
 

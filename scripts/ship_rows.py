@@ -35,31 +35,41 @@ Contract highlights (each is tested in tests/test_ship_rows.py):
   a per-pass wall-clock budget (~50s, SHIP_BUDGET_S) so passes end before the
   next cron tick.
 - WATERMARK ``data/ship_meta.json``: atomic tmp + fsync of the file AND the
-  directory (``rotation._fsync_dir``); it advances to the batch max id after
-  EACH 2xx and never otherwise. Corrupt/missing watermark = FATAL non-zero
-  exit naming the explicit ``--reset`` flag — never silently 0 (that would
-  reship millions of rows). ``--reset`` recovery may also DERIVE the starting
-  point from ``GET /ingest/state`` (NF MAX(id) <= local MAX(id) = same
-  lineage) — this script implements the explicit ``--reset`` path and applies
-  the same-lineage rule in the preflight below. Sanity: local ``MAX(id)`` <
-  watermark (DB restored/rebuilt) -> loud non-zero exit.
+  directory (``rotation._fsync_dir``). It is BORN AT PASS START — before
+  the FIRST POST of any pass that derives it (fresh start / ``--reset``)
+  the derived starting floor is written atomically — and from then on it
+  advances to the batch max id after EACH 2xx and never otherwise.
+  Consequence: a crash AFTER any POST always leaves a valid watermark file
+  behind — a MISSING watermark file proves no POST ever happened. Corrupt
+  watermark = FATAL non-zero exit naming the explicit ``--reset`` flag
+  (never silently 0 — that would reship millions of rows); missing
+  watermark = the strict fresh-start preflight below. Sanity: local
+  ``MAX(id)`` < watermark (DB restored/rebuilt) -> loud non-zero exit.
 - BACKFILL bounded and SMALL: ``SHIP_BACKFILL_HOURS`` (default 4, clamped to
   the 2-6h band) per-table ts column (ts_utc for spread_ticks/
   cross_issuer_ticks, snapshot_ts for oracle_predictions) or an explicit
-  ``SHIP_BACKFILL_FROM_ID`` — NEVER id 0 by default.
+  ``SHIP_BACKFILL_FROM_ID`` — NEVER id 0 by default. This derived floor is
+  exactly what BIRTHS the watermark file at pass start.
 - PREFLIGHT [R1][v4 trigger]: ``GET /ingest/state`` is called ONLY when NO
-  valid watermark file exists (fresh start / after ``--reset``). Any append
-  table non-empty on NF at that moment whose rows the local DB cannot account
-  for (NF MAX(id) > local MAX(id)) -> REFUSE with a message pointing at the
-  cutover runbook (archive the NF DB — all three files); override with
-  ``SHIP_FORCE=1``. Precedence: REFUSE wins over any FURTHER lineage
-  inference — old-collector rows cannot be distinguished (same-id rows at the
-  same maxima can hide a mixed lineage), so no content/tick_id/timestamp
-  sniffing is attempted; when the check does not cleanly pass, refuse.
-  Same-lineage rule for the --reset/derive path: NF MAX(id) <= local MAX(id)
-  for every non-empty append table = proceed (crash-resume — re-POSTs are
-  idempotent). When a valid watermark EXISTS the preflight is SKIPPED
-  entirely (crash-resume must not false-positive on this lineage's own rows).
+  valid watermark file exists (fresh start / after ``--reset``). The
+  watermark is born at pass start, so a missing file proves no POST ever
+  happened from this host — rows already on NF are FOREIGN.
+  * PLAIN fresh start (no ``--reset``) is STRICT: ANY non-empty append
+    table on NF (MAX(id) > 0) -> REFUSE — NO lineage inference whatsoever,
+    no matter how safe the maxima look. Old-collector rows with aligned
+    maxima are INDISTINGUISHABLE from ours (a mixed lineage can hide at
+    identical maxima; shipping would collide by id and ``INSERT OR IGNORE``
+    would silently drop rows) — REFUSE wins over any lineage inference; no
+    content/tick_id/timestamp sniffing is attempted. The message points at
+    the cutover runbook (archive the NF DB — all three files) and names
+    ``--reset`` and ``SHIP_FORCE=1`` (the explicit override).
+  * SAME-LINEAGE INFERENCE ONLY on the explicit ``--reset`` path: NF
+    MAX(id) <= local MAX(id) on every non-empty append table -> proceed
+    with a LOUD warning (indistinguishability caveat + runbook reference);
+    NF MAX(id) > local MAX(id) -> REFUSE, and this REFUSE OVERRIDES
+    ``SHIP_FORCE=1``. Plain re-runs never infer.
+  When a valid watermark EXISTS the preflight is SKIPPED entirely
+  (crash-resume must not false-positive on this lineage's own rows).
 - HTTP via ``urllib.request`` (stdlib only): retries 3x (2/4/8s) on network
   error/5xx/429; 413 = FATAL with the hint "halve SHIP_BATCH"; 401/403/422 =
   FATAL, the 422 body is printed (surfaces "NF schema older than local —
@@ -318,8 +328,13 @@ def read_watermark(path: Path) -> Optional[Dict[str, int]]:
     return dict(tables)
 
 
-def save_watermark(path: Path, wm: Dict[str, int]) -> None:
-    """Atomic + durable: tmp -> fsync(file) -> replace -> fsync(dir). [R5]"""
+def _write_watermark_file(path: Path, wm: Dict[str, int]) -> None:
+    """Atomic + durable file write: tmp -> fsync(file) -> replace -> fsync(dir).
+
+    Shared mechanics for BOTH watermark events [R5]: the pass-start BIRTH
+    (derived floor, before the FIRST POST) and the per-2xx advance recorded
+    by ``save_watermark`` below.
+    """
     tmp = path.with_name(path.name + ".tmp")
     doc = json.dumps({"version": WATERMARK_VERSION, "tables": wm}, sort_keys=True)
     with tmp.open("w", encoding="utf-8") as fh:
@@ -328,6 +343,11 @@ def save_watermark(path: Path, wm: Dict[str, int]) -> None:
         os.fsync(fh.fileno())
     os.replace(tmp, path)
     rotation._fsync_dir(path.parent)  # the rename itself must be durable
+
+
+def save_watermark(path: Path, wm: Dict[str, int]) -> None:
+    """Record an ADVANCE: called after EACH 2xx and never otherwise. [R5]"""
+    _write_watermark_file(path, wm)
 
 
 # ------------------------------ HTTP ---------------------------------------
@@ -417,57 +437,83 @@ _REFUSE_HEAD = (
     "exists to prove which are this lineage's — old-collector rows cannot be "
     "distinguished (REFUSE wins over any lineage inference)")
 
-_REFUSE_TAIL = (
+_REFUSE_TAIL_BASE = (
     ". Follow the cutover runbook: stop the service and archive the NF DB — "
     "ALL THREE files (spread_ticks.db, spread_ticks.db-wal, spread_ticks.db-"
-    "shm) — then re-run with --reset. Same-lineage rule (--reset/derive path): "
-    "if GET /ingest/state MAX(id) <= local MAX(id) for every append table the "
-    "rows are plausibly this lineage's crash-resume work and re-POSTs are "
-    "idempotent — verify that, then override with SHIP_FORCE=1")
+    "shm) — then re-run with --reset")
+
+_REFUSE_TAIL_STRICT = _REFUSE_TAIL_BASE + (
+    ". A PLAIN fresh start never infers lineage (any non-empty append table "
+    "-> REFUSE). If you have verified the rows already on NF are safe to "
+    "ship alongside this lineage's, override with SHIP_FORCE=1")
+
+_REFUSE_TAIL_RESET = _REFUSE_TAIL_BASE + (
+    ". This --reset-path REFUSE overrides SHIP_FORCE=1 (NF MAX(id) > local "
+    "MAX(id): rows this host cannot account for)")
+
+_REFUSE_TAIL_VIEW = _REFUSE_TAIL_BASE + (
+    " (the /ingest/state view is unusable — nothing is inferred or "
+    "overridden against an indeterminate view)")
 
 
-def _preflight(state: dict, local_max: Dict[str, int], force: bool) -> None:
+def _preflight(state: dict, local_max: Dict[str, int], force: bool,
+               reset: bool) -> None:
     """Cutover preflight [R1][v4]: ONLY when no valid watermark file exists.
 
-    Mixed lineage (NF MAX(id) > local MAX(id) on any append table — rows this
-    host cannot account for) -> REFUSE. Same-lineage rule for the --reset/
-    derive path: NF MAX(id) <= local MAX(id) = proceed (crash-resume; the
-    re-POST is idempotent INSERT OR IGNORE).
+    The watermark is BORN at pass start, so a missing file proves no POST
+    ever happened from this host — rows already on NF are FOREIGN.
+
+    PLAIN fresh start (no ``--reset``) is STRICT: ANY non-empty append table
+    (NF MAX(id) > 0) -> REFUSE with NO lineage inference whatsoever
+    (``SHIP_FORCE=1`` is the explicit override). Same-lineage inference
+    lives ONLY on the explicit ``--reset`` path: NF MAX(id) <= local MAX(id)
+    on every non-empty append table -> proceed with a LOUD warning
+    (indistinguishability caveat + runbook); NF MAX(id) > local MAX(id) ->
+    REFUSE, and that REFUSE overrides ``SHIP_FORCE=1``.
     """
     tables = state.get("tables")
     if not isinstance(tables, dict):
         raise ShipError(_REFUSE_HEAD + " (bad /ingest/state shape)"
-                        + _REFUSE_TAIL, EXIT_PREFLIGHT)
+                        + _REFUSE_TAIL_VIEW, EXIT_PREFLIGHT)
     dirty: List[tuple] = []
     for table in APPEND_TABLES:
         entry = tables.get(table)
         nf_max = entry.get("max_id") if isinstance(entry, dict) else None
         if type(nf_max) is not int or nf_max < 0:
             raise ShipError(_REFUSE_HEAD + f" (bad /ingest/state for {table})"
-                            + _REFUSE_TAIL, EXIT_PREFLIGHT)
+                            + _REFUSE_TAIL_VIEW, EXIT_PREFLIGHT)
         if nf_max > 0:
             dirty.append((table, nf_max))
     if not dirty:
-        return  # NF is clean: fresh lineage
-    same_lineage = all(nf_max <= local_max[table] for table, nf_max in dirty)
+        return  # NF is clean: nothing to protect
     detail = ", ".join(f"{t}: NF MAX(id)={nf} vs local {local_max[t]}"
                        for t, nf in dirty)
+    if not reset:
+        # STRICT fresh-start preflight: REFUSE beats ANY lineage inference —
+        # low maxima prove nothing (see _REFUSE_HEAD).
+        if force:
+            log.warning("SHIP_FORCE=1: shipping into a NON-EMPTY NF despite "
+                        "the strict fresh-start REFUSE (%s) — the rows "
+                        "already on NF cannot be proven this lineage's; see "
+                        "the cutover runbook (archive the NF DB — all three "
+                        "files)", detail)
+            return
+        raise ShipError(_REFUSE_HEAD + f" (fresh start: {detail})"
+                        + _REFUSE_TAIL_STRICT, EXIT_PREFLIGHT)
+    # --reset (explicit operator opt-in): same-lineage inference allowed.
+    same_lineage = all(nf_max <= local_max[table] for table, nf_max in dirty)
     if same_lineage:
         log.warning(
-            "preflight: NF already holds rows (%s) but NF MAX(id) <= local "
-            "MAX(id) everywhere — same-lineage rule on the --reset/derive "
-            "path: proceeding (re-POSTs are idempotent). If the NF DB was NOT "
-            "archived at cutover, old-collector rows cannot be distinguished "
-            "— see the cutover runbook (archive the NF DB — all three files)",
-            detail)
+            "preflight (--reset, same-lineage inference): NF already holds "
+            "rows (%s) and NF MAX(id) <= local MAX(id) everywhere — "
+            "proceeding (re-POSTs are idempotent). LOUD caveat: if the NF DB "
+            "was NOT archived at cutover, old-collector rows cannot be "
+            "distinguished from this lineage's (a mixed lineage can hide at "
+            "aligned maxima) — see the cutover runbook (archive the NF DB — "
+            "all three files)", detail)
         return
-    if force:
-        log.warning("SHIP_FORCE=1: shipping despite MIXED lineage on NF (%s) "
-                    "— data on NF from a different lineage will interleave "
-                    "with shipped rows; see the cutover runbook", detail)
-        return
-    raise ShipError(_REFUSE_HEAD + f" (mixed lineage: {detail})" + _REFUSE_TAIL,
-                    EXIT_PREFLIGHT)
+    raise ShipError(_REFUSE_HEAD + f" (mixed lineage: {detail})"
+                    + _REFUSE_TAIL_RESET, EXIT_PREFLIGHT)
 
 
 # ------------------------- local DB read helpers ---------------------------
@@ -502,13 +548,13 @@ def _select_rows(con: sqlite3.Connection, table: str, where: str = "",
 
 
 def _init_watermark(con: sqlite3.Connection, cfg: Config) -> Dict[str, int]:
-    """Fresh-start watermark: bounded backfill, NEVER id 0 by default. [R5]
+    """Derived starting floor — what BIRTHS the watermark at pass start. [R5]
 
     SHIP_BACKFILL_FROM_ID=N ships ids >= N (every append table); otherwise the
     watermark lands just before the oldest row inside the SHIP_BACKFILL_HOURS
     window (per-table ts column). Nothing inside the window (or garbage ts
     values) -> watermark = local MAX(id): ship from NOW on, never reship
-    ancient history.
+    ancient history. The result is written to disk BEFORE the first POST.
     """
     wm: Dict[str, int] = {}
     for table in APPEND_TABLES:
@@ -608,17 +654,15 @@ def _run(cfg: Config, reset: bool) -> int:
                         "restored/rebuilt? loud refusal: continuing would "
                         "silently skip rows", EXIT_WATERMARK)
         else:
-            if not reset:
-                raise ShipError(
-                    f"watermark {wm_path} is missing — refusing to guess "
-                    "(never silently 0). Pass --reset after verifying lineage "
-                    "(crash-resume: NF MAX(id) <= local MAX(id) -> --reset "
-                    "re-POSTs idempotently), or derive the start from GET "
-                    "/ingest/state and follow the cutover runbook",
-                    EXIT_WATERMARK)
+            # Fresh start (missing watermark — born at pass start, so its
+            # absence proves no POST ever happened) or explicit --reset:
+            # preflight FIRST, then derive the floor and BIRTH the watermark
+            # BEFORE the first POST. [R1]
             if not cfg.dry_run:  # preflight ONLY with no valid watermark [v4]
-                _preflight(_get_state(cfg), local_max, cfg.force)
+                _preflight(_get_state(cfg), local_max, cfg.force, reset)
             wm = _init_watermark(con, cfg)
+            if not cfg.dry_run:
+                _write_watermark_file(wm_path, wm)  # BORN AT PASS START [R1]
 
         counts = _drain(con, cfg, wm, wm_path)
     except ShipError:
@@ -634,7 +678,6 @@ def _run(cfg: Config, reset: bool) -> int:
             log.info("DRY-RUN: pass complete — would have shipped %d rows "
                      "(no network calls made, no watermark written)", total)
         return EXIT_OK
-    save_watermark(wm_path, wm)  # covers the nothing-shipped case (file birth)
     total = sum(counts.values())
     if total:  # summary line ONLY when something shipped (or failed) [R10]
         log.info("ship pass: shipped %d rows (%s)", total,
