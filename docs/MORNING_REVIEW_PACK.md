@@ -9,7 +9,7 @@
 | Swap `DEPLOYED_URL` placeholder in root README + SUBMISSION_CHECKLIST links block | ⏳ | commit: `__________` |
 | Record video (script: docs/VIDEO_SCRIPT.md) + upload → `VIDEO_URL` | ⏳ | URL: `______________` |
 | Swap `VIDEO_URL` placeholder in root README + checklist | ⏳ | |
-| Final `python3 -m pytest -q` = 248 passed | ⏳ | |
+| Final `python3 -m pytest -q` = 267 passed | ⏳ | |
 
 ## 2. ASK-OPERATOR (blocking — forms cannot be filled without these)
 
@@ -36,7 +36,7 @@
 2. Swap placeholders: `DEPLOYED_URL`, `VIDEO_URL` in root `README.md` + `docs/SUBMISSION_CHECKLIST.md`; commit + (allowed now) push.
 3. Record + upload video; verify playback at `VIDEO_URL`.
 4. **D4 go** → flip repo public → verify incognito view shows README + LICENSE.
-5. Smoke-test public repo + deployed URL one last time (`pytest` still 248).
+5. Smoke-test public repo + deployed URL one last time (`pytest` still 267).
 6. **Google Form #1** — paste drafts from `docs/SUBMISSION_CHECKLIST.md` §2 (one-liner, detailed description, track, team A1, wallet A2).
 7. **Google Form #2** — written demo, tech stack, BNB Chain integration, growth/Agent Bazaar, tx hashes/contract (D5), links block.
 8. Re-read both forms once (char limits are respected per the counts in §4 of the checklist; re-check the root README tagline char count after the placeholder swap), submit **before 12:00 UTC**.

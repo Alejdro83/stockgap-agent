@@ -70,7 +70,7 @@ cd stockgap-agent
 
 # Verify (no Docker — runs directly on Python 3; no Docker build is part of this track)
 python3 -m pytest -q
-# 248 passed in 7.24s
+# 267 passed in 4.19s
 
 # Start the dashboard (local only — no public URL)
 nohup python3 scripts/dashboard.py >> data/dashboard.log 2>&1 &
@@ -115,12 +115,13 @@ Per-module test counts (measured: `grep -c 'def test_' tests/*.py`; no build-ord
 | test_onchain_writer | 22 | `PriceRegistry` binding, `ORACLE_PUBLISH` toggle, snapshot-id derivation |
 | test_oracle | 27 | per-share close normalization, fallbacks, cache TTL |
 | test_oracle_reliability | 2 | fetch-first reference refresh (no txn during fetch), chunked write holds |
+| test_rotation | 19 | rename-based JSONL self-rotation (no-clobber + hardlink-less fallback), crash-safe gzip, copytruncate, prune dedupe |
 | test_spread | 30 | spread engine, cross-issuer |
 | test_spread_real | 24 | ratio normalization, NFLX regression, derived-vs-real |
 | test_telemetry | 3 | Sentry `SENTRY_DSN` toggle: no-DSN no-op, DSN init (mocked), app boots |
-| **Total** | **248** | **all passing** |
+| **Total** | **267** | **all passing** |
 
-Recorded suite-size checkpoints in DX-LOG (milestone notes, **not** a build order): 15 → 82 → 98 → 125 → 199 → 202 → 213 → **248**.
+Recorded suite-size checkpoints in DX-LOG (milestone notes, **not** a build order): 15 → 82 → 98 → 125 → 199 → 202 → 213 → 248 → 263 → **267**.
 
 **Token universe (verified live):** **488 tokens = 442 Ondo + 46 BStock**. xStocks are documented in the API but are **NOT listed live** — `rwa/search` for `AAPLx`/`NVDAx`/`TSLAx` returns code 40382 (not found). Never assume 1 token = 1 share: `tokenToShareRatio` ranges ≈0.0667–10.03 (228/488 are exactly 1).
 
@@ -128,7 +129,7 @@ Recorded suite-size checkpoints in DX-LOG (milestone notes, **not** a build orde
 
 ```bash
 python3 -m pytest -q
-# 248 passed in 7.24s
+# 267 passed in 4.19s
 ```
 
 Test coverage includes:
@@ -196,7 +197,7 @@ stockgap-agent/
 ├── stockgap/          # signer, client, collector, spread, alerts, oracle, executor,
 │   │                  #   balance, dashboard, mcp_server, b402_gate, telemetry (+ templates/)
 ├── scripts/           # run_collector, alerts, summary, dashboard launcher, demo driver, fixtures fetchers
-├── tests/             # 14 test modules, 248 tests
+├── tests/             # 15 test modules, 267 tests
 ├── config/            # alerts.env, mcp.env, oracle.env (no live secrets inside)
 ├── fixtures/          # real OCResult<T> envelopes + MANIFEST.json
 ├── data/              # SQLite + logs (not committed, ~400 MB)

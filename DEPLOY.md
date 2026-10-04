@@ -101,4 +101,5 @@ target steady state).
 - A stale `collector.pid` on the volume can't fool the watchdog (entrypoint deletes it at startup), but PID checks only work within the container's PID namespace — correct here.
 - SQLite WAL runs on the Northflank volume; `busy_timeout=10s` + `BEGIN IMMEDIATE` (see `stockgap/db.py`) absorb slower storage, but volume I/O latency directly affects tick cadence.
 - `/data` growth is now PARTIALLY bounded: the JSONL mirror and all operational logs rotate (live file ≤ `JSONL_MAX_MB`/`LOG_MAX_MB`, archives pruned to `JSONL_KEEP_ARCHIVES`/`LOG_KEEP_ARCHIVES`, compressed — measured on a real 50 MB `ticks.jsonl` sample: `gzip -6` → 7.2 MB = **14.4 % of original**, 7.0×). **`spread_ticks.db` + WAL are NOT bounded** by this mechanism and remain the long-term growth driver — monitor volume usage.
+- alerts.jsonl is stateless write-only telemetry (alerts.py) — safe to truncate; no state lives in it.
 - Port 8098 is public; the dashboard is read-only but also serves `POST /mcp` (pay-per-call gate, `MCP_PAY_MODE=free` by default). Restrict network access if this should not be internet-facing.
