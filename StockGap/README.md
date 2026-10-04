@@ -70,7 +70,7 @@ cd stockgap-agent
 
 # Verify (no Docker — runs directly on Python 3; no Docker build is part of this track)
 python3 -m pytest -q
-# 273 passed in 4.23s
+# 383 passed in ~123s (measured 2026-10-04, wall)
 
 # Start the dashboard (local only — no public URL)
 nohup python3 scripts/dashboard.py >> data/dashboard.log 2>&1 &
@@ -100,7 +100,7 @@ curl -s -X POST http://localhost:8098/mcp -H 'Content-Type: application/json' \
 
 ## 📊 Stage Progress
 
-Per-module test counts (measured: `grep -c 'def test_' tests/*.py`; no build-order implied):
+Per-module test counts (measured: per-file pytest collection, 2026-10-04 — `grep -c 'def test_'` undercounts parametrized cases; no build-order implied):
 
 | Module | Tests | Key features |
 |--------|------:|--------------|
@@ -110,18 +110,22 @@ Per-module test counts (measured: `grep -c 'def test_' tests/*.py`; no build-ord
 | test_collector | 14 | batched collection, provenance columns, resilient tick loop |
 | test_dashboard | 13 | read-only dashboard + fragments |
 | test_db | 4 | WAL/busy_timeout factory, `ensure_wal` assertion, ro fresh-read |
+| test_deploy_contract | 16 | `STOCKGAP_MODE` entrypoint contract: dashboard mode disables fetch loops, keeps rotation + tail; preflight before anything serves |
+| test_deploy_preflight | 19 | fail-closed deploy token check (≥ 32 chars, printable ASCII 33–126) + ingest router mounted & hidden on the dashboard |
 | test_executor | 27 | tx sanitization, chain/router refusals, simulate gate, pre-broadcast deadline gate, unified `quote_and_swap` |
+| test_ingest | 41 | token-gated `POST /ingest/rows` (auth-first, 4 MiB cap, 422 validation), idempotent append + real snapshot upsert, `GET /ingest/state` |
 | test_mcp | 14 | JSON-RPC tools, free/dispatch, idempotent paid calls |
 | test_onchain_writer | 22 | `PriceRegistry` binding, `ORACLE_PUBLISH` toggle, snapshot-id derivation |
 | test_oracle | 27 | per-share close normalization, fallbacks, cache TTL |
 | test_oracle_reliability | 2 | fetch-first reference refresh (no txn during fetch), chunked write holds |
 | test_rotation | 25 | rename-based JSONL self-rotation (no-clobber incl. FileExistsError guard + hardlink-less fallback), crash-safe gzip (best-effort dir fsync), copytruncate, prune dedupe |
+| test_ship_rows | 34 | local→NF shipper: self-lock, atomic pass-start watermark, strict fresh-start preflight (`SHIP_FORCE`/`--reset` semantics), bounded backfill, dry run |
 | test_spread | 30 | spread engine, cross-issuer |
 | test_spread_real | 24 | ratio normalization, NFLX regression, derived-vs-real |
 | test_telemetry | 3 | Sentry `SENTRY_DSN` toggle: no-DSN no-op, DSN init (mocked), app boots |
-| **Total** | **273** | **all passing** |
+| **Total** | **383** | **all passing** |
 
-Recorded suite-size checkpoints in DX-LOG (milestone notes, **not** a build order): 15 → 82 → 98 → 125 → 199 → 202 → 213 → 248 → 263 → 267 → 272 → **273**.
+Recorded suite-size checkpoints in DX-LOG (milestone notes, **not** a build order): 15 → 82 → 98 → 125 → 199 → 202 → 213 → 248 → 263 → 267 → 272 → 273 → **383**.
 
 **Token universe (verified live):** **488 tokens = 442 Ondo + 46 BStock**. xStocks are documented in the API but are **NOT listed live** — `rwa/search` for `AAPLx`/`NVDAx`/`TSLAx` returns code 40382 (not found). Never assume 1 token = 1 share: `tokenToShareRatio` ranges ≈0.0667–10.03 (228/488 are exactly 1).
 
@@ -129,7 +133,7 @@ Recorded suite-size checkpoints in DX-LOG (milestone notes, **not** a build orde
 
 ```bash
 python3 -m pytest -q
-# 273 passed in 4.23s
+# 383 passed in ~123s (measured 2026-10-04, wall)
 ```
 
 Test coverage includes:
@@ -197,7 +201,7 @@ stockgap-agent/
 ├── stockgap/          # signer, client, collector, spread, alerts, oracle, executor,
 │   │                  #   balance, dashboard, mcp_server, b402_gate, telemetry (+ templates/)
 ├── scripts/           # run_collector, alerts, summary, dashboard launcher, demo driver, fixtures fetchers
-├── tests/             # 15 test modules, 273 tests
+├── tests/             # 19 test modules, 383 tests
 ├── config/            # alerts.env, mcp.env, oracle.env (no live secrets inside)
 ├── fixtures/          # real OCResult<T> envelopes + MANIFEST.json
 ├── data/              # SQLite + logs (not committed, ~400 MB)
