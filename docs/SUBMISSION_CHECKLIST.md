@@ -39,13 +39,13 @@ Tokenized stocks trade on-chain; the underlying share trades on a traditional ex
 
 What it does: (1) a rate-limit-aware collector polls 488 RWA tokens (442 Ondo + 46 BStock) every 30s and stores price/reference ticks; (2) a spread engine normalizes by tokenToShareRatio (1 token != 1 share; ratios 0.0667-10.03) and reports spread_bps_real against the independent close; (3) a threshold-crossing alert scanner with rate limiting and digest mode; (4) a mobile-first dashboard (FastAPI + HTMX, SQLite read-only) on localhost:8098; (5) a weekend oracle predicting Monday's implied open vs the last independent close, with deviation flags and an ERC-8004-style reputation loop; (6) an MCP server (JSON-RPC 2.0) whose read tools sit behind an x402/b402 pay-per-call gate - 402 responses carry x402Version:1, payments verified as on-chain receipts (local_receipt) or Binance settlement; every MCP response carries an ERC-8004-style identity header, and the oracle publishes its derived price to an on-chain PriceRegistry on BSC mainnet (ORACLE_PUBLISH toggle).
 
-Honest numbers (2026-10-03): ~1.0M spread_ticks rows; |spread| p25/p50/p75 = 5.1/13.5/32.9 bps (abs>0.5 filter, n~477K); 488 RWA + 40 cross-issuer pairs per 30s tick; 442 underlyings with an independent close; 383 passing tests. Honest limits: three early demo-trade broadcasts reverted (2s route deadline, root cause in RECOVERY.md) - the pipeline now has a pre-broadcast deadline gate and the first live trade succeeded (1 wei dust demo); the on-chain oracle writer is real on BSC mainnet but toggled off by default (mock DB ledger); live b402 binance settlement is mock-tested only and the API account has no b402 merchant provisioned. Built by a three-seat multi-agent factory.
+Honest numbers (2026-10-03): ~1.0M spread_ticks rows; |spread| p25/p50/p75 = 5.1/13.5/32.9 bps (abs>0.5 filter, n~477K); 488 RWA + 40 cross-issuer pairs per 30s tick; 442 underlyings with an independent close; 392 passing tests. Honest limits: three early demo-trade broadcasts reverted (2s route deadline, root cause in RECOVERY.md) - the pipeline now has a pre-broadcast deadline gate and the first live trade succeeded (1 wei dust demo); the on-chain oracle writer is real on BSC mainnet but toggled off by default (mock DB ledger); live b402 binance settlement is mock-tested only and the API account has no b402 merchant provisioned. Built by a three-seat multi-agent factory.
 ```
 
 ### Written demo — limit 1500 — **1152 chars**
 ```
 Written demo (judge-runnable, ~10 min; full run notes: StockGap/README.md):
-1. git clone the repo; python3 -m pytest -q -> 383 passed (~123s).
+1. git clone the repo; python3 -m pytest -q -> 392 passed (~125s).
 2. mkdir -p data (data/ is gitignored); python3 scripts/run_collector.py - watch a live 30s tick of 488 RWA tokens land in SQLite with per-row provenance (source_endpoint, reference_kind, fetched_at).
 3. python3 stockgap/oracle.py --once - one oracle snapshot (its derived price publishes to a PriceRegistry contract on BSC mainnet when ORACLE_PUBLISH=1); then nohup python3 scripts/dashboard.py -> open http://localhost:8098 - mobile-first spread dashboard (SQLite read-only); sort by spread_bps_real to see live gaps vs the independent close (|spread| p50 = 13.5 bps).
 4. curl POST /mcp tools/list (always free) -> three read tools; tools/call get_oracle_latest -> weekend-Monday-open oracle snapshot with deviation_bps + deviation_flag per underlying (442 with independent closes). With MCP_PAY_MODE=b402 the same call returns HTTP 402 + x402Version receipt instructions: pay-per-call agent access.
@@ -59,7 +59,7 @@ Infrastructure & Tooling: StockGap is the measurement, alerting and agent-access
 
 ### Tech stack — **357 chars**
 ```
-Python 3; FastAPI + Jinja2 + HTMX (mobile dashboard); SQLite (WAL, short write transactions, read-only readers); JSON-RPC 2.0 MCP server; x402/b402 pay gate with on-chain receipt verification on BSC; HMAC-SHA256 request signing (OpenSSL cross-checked); Sentry observability (opt-in toggle); pytest (383 tests); Dockerfile + supervisor for Northflank deploy.
+Python 3; FastAPI + Jinja2 + HTMX (mobile dashboard); SQLite (WAL, short write transactions, read-only readers); JSON-RPC 2.0 MCP server; x402/b402 pay gate with on-chain receipt verification on BSC; HMAC-SHA256 request signing (OpenSSL cross-checked); Sentry observability (opt-in toggle); pytest (392 tests); Dockerfile + supervisor for Northflank deploy.
 ```
 
 ### BNB Chain integration — **1229 chars**
