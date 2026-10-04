@@ -5,3 +5,4 @@ __pycache__/
 data/
 *.log
 youtube_uploader_mcp.log
+config/ingest.env
