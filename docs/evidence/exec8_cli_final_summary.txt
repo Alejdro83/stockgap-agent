@@ -1,0 +1,20 @@
+Resumen final del checklist
+
+  1. Tests: python3 -m pytest tests/ -q --ignore=tests/test_deploy_contract.py dio 402 passed. tests/test_compact_ledger.py dio 26 passed.
+  2. --migrate-indexes con writers parados: el bucle imprimió all writers stopped antes de migrar. Creó los 4 índices en unos 3 s: idx_spread_ts, idx_hourly_ts, idx_cross_ts e idx_oracle_ts.
+  3. Dry-run pre-migración: index_present: False, recorrido omitido, failures: 0, exit 0.
+  4. Dry-run post-migración: index_present: True, failures: 0, aborted: False, todos los planned_* en 0, exit 0. El dato más viejo es del 2026-10-02 y el corte es de 14 días.
+  5. crontab -l | grep -c 'rotate_data.py': 1.
+  6. git status limpio en ledger-compaction: vacío tras b46b080.
+
+  Extras
+  - Cron nocturno: hay una sola línea 25 4 * * * de compact_ledger.py. La primera ejecución real, a las 04:25, corre desde esta rama sin mergear.
+  - Monitor de 5 minutos: 0 errores en collector.log y 0 en dashboard.log desde las 19:34. El 288 que imprimió el monitor es el total histórico del archivo. La ingesta siguió a unas 976 filas por minuto.
+  - Procesos: run_collector.py y dashboard.py están vivos, con el dashboard en HTTP 200. El crontab tiene de vuelta los 4 writers.
+
+✻ Crunched for 9s · done 19:44
+                                                                                                                                                                                    ✔ Update installed · Restart to update
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ push the branch
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · install gh for PR status · ← 2 agents
