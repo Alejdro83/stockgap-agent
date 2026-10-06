@@ -76,6 +76,15 @@ Honest limits: three early demo-trade broadcasts reverted on-chain (2-second in-
 
 [StockGap/README.md](./StockGap/README.md) (deep dive) · [FACTORY.md](./FACTORY.md) · [RECOVERY.md](./RECOVERY.md) · [DX-LOG.md](./DX-LOG.md) · [docs/](./docs/) (submission pack)
 
+## Maintenance
+
+- `scripts/rotate_data.py` runs every 10 minutes from crontab (`flock -n` + `nice`): gzips JSONL archives and copytruncates `data/*.log` / `data/logs/*.log` past `LOG_MAX_MB`.
+- `scripts/compact_ledger.py` runs daily at 04:25 (`flock -n` + `ionice` + `nice`): folds raw `spread_ticks` older than `RAW_KEEP_DAYS` into `spread_ticks_hourly` bars and prunes old bars / `cross_issuer_ticks` / `oracle_predictions`. It only touches rows the shipper has already shipped (`ship_meta.json` watermark) and never the newest row; with no valid watermark it aggregates and deletes nothing.
+- Knobs: `RAW_KEEP_DAYS=14`, `HOURLY_KEEP_DAYS=180`, `CROSS_KEEP_DAYS=180`, `ORACLE_KEEP_DAYS=180`. An invalid value falls back to the default; a valid but too-low value is clamped up (raw ≥ 2 days, hourly > raw).
+- `--dry-run` writes no data (`data/spread_ticks.db` stays byte-identical) but may create `spread_ticks.db-wal` / `-shm` when it opens the read connection — it is not "touches nothing".
+- `--migrate-indexes` is a one-time step that needs every writer stopped (collector, dashboard, alerts, oracle, shipper); the nightly job refuses to run without `idx_spread_ts`.
+- There is no automatic `VACUUM`.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE).
