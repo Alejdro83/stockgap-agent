@@ -42,24 +42,24 @@ What it does: (1) a rate-limit-aware collector polls 488 RWA tokens (442 Ondo + 
 Honest numbers (2026-10-03): ~1.0M spread_ticks rows; |spread| p25/p50/p75 = 5.1/13.5/32.9 bps (abs>0.5 filter, n~477K); 488 RWA + 40 cross-issuer pairs per 30s tick; 442 underlyings with an independent close; 392 passing tests. Honest limits: three early demo-trade broadcasts reverted (2s route deadline, root cause in RECOVERY.md) - the pipeline now has a pre-broadcast deadline gate and the first live trade succeeded (1 wei dust demo); the on-chain oracle writer is real on BSC mainnet but toggled off by default (mock DB ledger); live b402 binance settlement is mock-tested only and the API account has no b402 merchant provisioned. Built by a three-seat multi-agent factory.
 ```
 
-### Written demo — limit 1500 — **1152 chars**
+### Written demo — limit 1500 — **1226 chars**
 ```
 Written demo (judge-runnable, ~10 min; full run notes: StockGap/README.md):
 1. git clone the repo; python3 -m pytest -q -> 392 passed (~125s).
-2. mkdir -p data (data/ is gitignored); python3 scripts/run_collector.py - watch a live 30s tick of 488 RWA tokens land in SQLite with per-row provenance (source_endpoint, reference_kind, fetched_at).
+2. mkdir -p data (data/ is gitignored); python3 scripts/run_collector.py - watch a live 30s tick of 488 RWA tokens (Binance Web3 RWA Data API: rwa/tokens, rwa/price, rwa/underlying-market) land in SQLite with per-row provenance (source_endpoint, reference_kind, fetched_at).
 3. python3 stockgap/oracle.py --once - one oracle snapshot (its derived price publishes to a PriceRegistry contract on BSC mainnet when ORACLE_PUBLISH=1); then nohup python3 scripts/dashboard.py -> open http://localhost:8098 - mobile-first spread dashboard (SQLite read-only); sort by spread_bps_real to see live gaps vs the independent close (|spread| p50 = 13.5 bps).
 4. curl POST /mcp tools/list (always free) -> three read tools; tools/call get_oracle_latest -> weekend-Monday-open oracle snapshot with deviation_bps + deviation_flag per underlying (442 with independent closes). With MCP_PAY_MODE=b402 the same call returns HTTP 402 + x402Version receipt instructions: pay-per-call agent access.
 5. Alerts demo: scripts/alerts.py crossing scanner (digest + per-token rate limiting) -> data/alerts.jsonl.
 ```
 
-### Track selection — **Infrastructure & Tooling** (+ justification, 393 chars)
+### Track selection — **Tokenized Stocks Products & Agents** (single track; + justification, 519 chars)
 ```
-Infrastructure & Tooling: StockGap is the measurement, alerting and agent-access layer that tokenized equities on BNB Chain are missing (independent reference pricing, spread telemetry, pay-per-call MCP). The alternative, Set & Earn, is scoped to BNB Agent Studio agents; StockGap is an independent MCP data service with x402/b402 monetization, so Infrastructure & Tooling is where it belongs.
+Tokenized Stocks Products & Agents (the hackathon's single track): StockGap is an on-chain vs reference price monitor for tokenized stocks, built centrally on the RWA Data API (rwa/tokens, rwa/price, rwa/underlying-market) - the track's idea list names exactly this. Track rule: bStocks, Ondo or xStocks must be central; the live universe is 442 Ondo + 46 BStock (xStocks appear only in tests and are not claimed). Independent reference pricing, spread telemetry and a pay-per-call (x402/b402) MCP layer on BSC mainnet.
 ```
 
-### Tech stack — **357 chars**
+### Tech stack — **456 chars**
 ```
-Python 3; FastAPI + Jinja2 + HTMX (mobile dashboard); SQLite (WAL, short write transactions, read-only readers); JSON-RPC 2.0 MCP server; x402/b402 pay gate with on-chain receipt verification on BSC; HMAC-SHA256 request signing (OpenSSL cross-checked); Sentry observability (opt-in toggle); pytest (392 tests); Dockerfile + supervisor for Northflank deploy.
+Binance Web3 RWA Data API (rwa/tokens, rwa/price, rwa/underlying-market) for tokenized-stock data; Python 3; FastAPI + Jinja2 + HTMX (mobile dashboard); SQLite (WAL, short write transactions, read-only readers); JSON-RPC 2.0 MCP server; x402/b402 pay gate with on-chain receipt verification on BSC; HMAC-SHA256 request signing (OpenSSL cross-checked); Sentry observability (opt-in toggle); pytest (392 tests); Dockerfile + supervisor for Northflank deploy.
 ```
 
 ### BNB Chain integration — **1229 chars**
@@ -94,7 +94,7 @@ Contract (BSC mainnet): PriceRegistry 0x8d2cf4a56f754d5770985d95aa179ef4d5b9b971
 | A1 | Team members | Real name, role, contact (email/handle) per team member — for the team fields in both forms | ❓ BLOCKING |
 | A2 | BNB wallet (HEX) | Wallet address in HEX (0x…) for the wallet field / potential prize payout | ❓ BLOCKING |
 | A3 | Tagline pick | Confirm Option A (198 chars, already in root README) or switch to B/C — see morning review pack | ❓ decision (D2) |
-| A4 | Track confirm | Confirm **Infrastructure & Tooling** (drafted justification above) | ❓ decision (D1) |
+| A4 | Track confirm | Wording aligned to the real single track **Tokenized Stocks Products & Agents** (official event page, verified 2026-10-07 — "Infrastructure & Tooling"/"Set & Earn" were an older form's options); final confirm against the real form's options = A9 | ❓ decision (D1, gated on A9) |
 | A5 | Public-flip go/no-go | Flip repo public only after deploy URL lands and README placeholders (`DEPLOYED_URL`, `VIDEO_URL`) are replaced | ❓ decision (D4) |
 | A7 | Video host | Where to upload the recording (YouTube?) so `VIDEO_URL` can be filled | ❓ BLOCKING |
 | A8 | Oracle on-chain writer | ✅ RESOLVED (2026-10-03): real BSC **mainnet** publish — `PriceRegistry` [`0x8d2cf4a56f754d5770985d95aa179ef4d5b9b971`](https://bscscan.com/address/0x8d2cf4a56f754d5770985d95aa179ef4d5b9b971), deploy tx [`0x2235be2b…afa1`](https://bscscan.com/tx/0x2235be2b3c516f89f4bdb84f199fb774182c424f024a10d1a35569536948afa1) (block 125562365), publish tx [`0x8055d62e…7cec`](https://bscscan.com/tx/0x8055d62e8667e5564e3ad448a0a5f769285a918ee7f1b05b3ec436ac1dc97cec) (block 125562760, event `OraclePublish`); writer behind `ORACLE_PUBLISH=0\|1` toggle (default 0). ERC-8004 registry id still `REGISTRY_PLACEHOLDER` | ✅ RESOLVED |
@@ -105,9 +105,9 @@ Contract (BSC mainnet): PriceRegistry 0x8d2cf4a56f754d5770985d95aa179ef4d5b9b971
 |---|---|---|
 | One-liner A / B / C | 200 | 198 / 167 / 167 |
 | Detailed description | 2000 | 1991 (truth-passed; trimmed from an over-limit draft) |
-| Written demo | 1500 | 1152 |
-| Track justification | (no limit given) | 393 |
-| Tech stack | (no limit given) | 357 |
+| Written demo | 1500 | 1226 |
+| Track justification | (no limit given) | 519 |
+| Tech stack | (no limit given) | 456 |
 | BNB Chain integration | (no limit given) | 1229 |
 | Growth / Agent Bazaar | (no limit given) | 673 |
 | Tx hashes / contract | ≤ 3 hashes | 610 (3 hashes, all status 0x1) |

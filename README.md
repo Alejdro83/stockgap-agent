@@ -17,7 +17,7 @@ Prepared for **BNB Hack: Tokenized Stocks Edition** (submissions lock 2026-10-11
 
 ## What it does
 
-1. **Monitor** — a rate-limit-aware collector polls 488 RWA tokenized stocks (442 Ondo + 46 BStock) every 30 s and stores price/reference ticks with per-row provenance.
+1. **Monitor** — a rate-limit-aware collector polls 488 RWA tokenized stocks (442 Ondo + 46 BStock) every 30 s through the **Binance Web3 RWA Data API** (`rwa/tokens`, `rwa/price`, `rwa/underlying-market` — the track's tokenized-stocks data layer) and stores price/reference ticks with per-row provenance.
 2. **Measure** — a spread engine normalizes by `tokenToShareRatio` (1 token ≠ 1 share) and reports `spread_bps_real`: the gap between the token's implied price and an **independent** per-share close. The naive derived-pair spread is structurally ≈0 — StockGap measures the gap that actually exists.
 3. **Alert** — threshold-crossing scanner (cron `*/2`) with per-token rate limiting and digest mode.
 4. **Visualize** — mobile-first dashboard (FastAPI + Jinja2 + HTMX) on `:8098`, SQLite opened read-only.
@@ -45,9 +45,9 @@ curl -s -X POST http://localhost:8098/mcp -H 'Content-Type: application/json' \
 
 With `MCP_PAY_MODE=b402`, calls return HTTP 402 + `x402Version:1` receipt instructions — pay-per-call agent access. Full run notes: [StockGap/README.md](./StockGap/README.md).
 
-## Track: Infrastructure & Tooling
+## Track: Tokenized Stocks Products & Agents (main track)
 
-StockGap is not a consumer DeFi product — it is the measurement, alerting and agent-access layer that tokenized equities on BNB Chain are missing: independent reference pricing, spread telemetry, and a pay-per-call MCP interface. "Set & Earn" is tempting because our x402/b402 gate literally monetizes agent calls, but the Set & Earn bonus counts only for BNB Agent Studio agents; StockGap is an independent MCP data service. Infrastructure & Tooling is the honest home for it.
+StockGap submits to the hackathon's single track — **Tokenized Stocks Products & Agents** (verified on the official event page 2026-10-07; the "Infrastructure & Tooling" / "Set & Earn" options belong to an older form edition and are not claimed). The fit is direct: the track rule asks for bStocks, Ondo or xStocks to be central — StockGap's live universe is **442 Ondo + 46 BStock** (xStocks appear only in tests and are not claimed) — and the track's idea list names an "on-chain vs reference price monitor" on the **RWA Data API**, which is exactly what StockGap is: independent reference pricing, spread telemetry (`spread_bps_real`), and a pay-per-call MCP interface for agents. The BNB Agent Studio / Agentic Wallet special prizes are optional add-ons tied to bonus judging, not separate tracks.
 
 ## BNB Chain integration
 
