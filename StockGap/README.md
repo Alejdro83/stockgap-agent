@@ -70,7 +70,7 @@ cd stockgap-agent
 
 # Verify (no Docker — runs directly on Python 3; no Docker build is part of this track)
 python3 -m pytest -q
-# 392 passed in ~125s (measured 2026-10-04, wall)
+# 416 passed, 2 skipped in ~127s (measured 2026-10-08 @ d6de0a5; needs `pip install eth-account`)
 
 # Start the dashboard (local only — no public URL)
 nohup python3 scripts/dashboard.py >> data/dashboard.log 2>&1 &
@@ -123,7 +123,7 @@ Per-module test counts (measured: per-file pytest collection, 2026-10-04 — `gr
 | test_spread | 30 | spread engine, cross-issuer |
 | test_spread_real | 24 | ratio normalization, NFLX regression, derived-vs-real |
 | test_telemetry | 3 | Sentry `SENTRY_DSN` toggle: no-DSN no-op, DSN init (mocked), app boots |
-| **Total** | **392** | **all passing** |
+| **Total (2026-10-04 breakdown)** | **392** | per-module table below dates from 2026-10-04; current full run: 416 passed, 2 skipped @ d6de0a5 |
 
 Recorded suite-size checkpoints in DX-LOG (milestone notes, **not** a build order): 15 → 82 → 98 → 125 → 199 → 202 → 213 → 248 → 263 → 267 → 272 → 273 → 383 → **392**.
 
@@ -133,7 +133,7 @@ Recorded suite-size checkpoints in DX-LOG (milestone notes, **not** a build orde
 
 ```bash
 python3 -m pytest -q
-# 392 passed in ~125s (measured 2026-10-04, wall)
+# 416 passed, 2 skipped in ~127s (measured 2026-10-08 @ d6de0a5; needs `pip install eth-account`)
 ```
 
 Test coverage includes:
@@ -201,7 +201,7 @@ stockgap-agent/
 ├── stockgap/          # signer, client, collector, spread, alerts, oracle, executor,
 │   │                  #   balance, dashboard, mcp_server, b402_gate, telemetry (+ templates/)
 ├── scripts/           # run_collector, alerts, summary, dashboard launcher, demo driver, fixtures fetchers
-├── tests/             # 19 test modules, 392 tests
+├── tests/             # 19 test modules, 418 tests (416 passed, 2 skipped)
 ├── config/            # alerts.env, mcp.env, oracle.env (no live secrets inside)
 ├── fixtures/          # real OCResult<T> envelopes + MANIFEST.json
 ├── data/              # SQLite + logs (not committed, ~400 MB)
