@@ -1,0 +1,8 @@
+# captured_at_utc: 2026-10-08T00:43:22Z
+HTTP/1.1 402 Payment Required
+date: Thu, 08 Oct 2026 00:43:21 GMT
+server: uvicorn
+content-length: 371
+content-type: application/json
+
+{"x402Version":1,"error":"Este tx hash ya fue usado para una llamada anterior","accepts":[{"scheme":"exact","network":"eip155:97","asset":"native","payTo":"0xb471f1aB267144CF4CFff4800beA3ebC0E08ae64","maxAmountRequired":"5000000000000000","resource":"/mcp","description":"StockGap MCP: get_spread (pago por llamada)","provider":"local_receipt","maxTimeoutSeconds":1800}]}

@@ -1,0 +1,11 @@
+# captured_at_utc: 2026-10-07T19:04:12Z
+HTTP/1.1 200 OK
+date: Wed, 07 Oct 2026 19:04:12 GMT
+server: uvicorn
+content-length: 730
+content-type: application/json
+
+{"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"{\"metric\": \"spread_bps_real\", \"tick_ts\": \"2026-10-07T18:56:03.349Z\", \"rows\": [{\"token_symbol\": \"NVDAon\", \"underlying_ticker\": \"NVDA\", \"platform_id\": \"ondo\", \"token_price\": 237.12460224389616, \"reference_price\": 236.718571, \"market_status\": \"regular\", \"open_state\": 1, \"metric_bps\": -8.783153030052754}]}"}],"structuredContent":{"metric":"spread_bps_real","tick_ts":"2026-10-07T18:56:03.349Z","rows":[{"token_symbol":"NVDAon","underlying_ticker":"NVDA","platform_id":"ondo","token_price":237.12460224389616,"reference_price":236.718571,"market_status":"regular","open_state":1,"metric_bps":-8.783153030052754}]},"isError":false}}# --- SQL sobre la copia (step 4): SELECT COUNT(*) ... tick_id=MAX(tick_id), token_symbol='NVDAon', metric NOT NULL ---
+1
+# --- MAX(ts_utc) del snapshot (copia) ---
+2026-10-07T18:56:03.349Z

@@ -1,0 +1,9 @@
+# captured_at_utc: 2026-10-07T19:05:12Z
+# --- linea base E3b segun estado de la copia (antes del paso 5) ---
+# SELECT COUNT(*) FROM sqlite_master WHERE name='paid_calls';
+0
+# --- tras el paso 5 (smoke negativo con H_fail) ---
+# SELECT COUNT(*) FROM sqlite_master WHERE name='paid_calls';
+1
+# SELECT COUNT(*) FROM paid_calls; (despues)
+0

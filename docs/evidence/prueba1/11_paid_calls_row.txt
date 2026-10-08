@@ -1,0 +1,5 @@
+# captured_at_utc: 2026-10-08T00:43:42Z
+# query: SELECT * FROM paid_calls WHERE tx_hash='0x58e1b19f611c907ada63bae3ad46379c0dbf0907e008e65947615aeaf102474a' (DB copy, read-only)
+# columns: tx_hash | payer | amount | tool | provider | paid_at
+0x58e1b19f611c907ada63bae3ad46379c0dbf0907e008e65947615aeaf102474a | 0x069ac6d8cf3553416fe5a4f0410ebeb758a8f819 | 5000000000000000 | get_spread | local_receipt | 2026-10-08T00:43:08Z
+# rows_for_hash: 1 | total_rows_in_paid_calls: 1

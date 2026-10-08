@@ -1,0 +1,8 @@
+# captured_at_utc: 2026-10-07T18:57:40Z
+HTTP/1.1 200 OK
+date: Wed, 07 Oct 2026 18:57:40 GMT
+server: uvicorn
+content-length: 991
+content-type: application/json
+
+{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"get_spread","description":"Mayores spreads actuales (bps) entre el token tokenizado y su subyacente; `metric` indica la métrica usada (spread_bps_real si existe, si no spread_bps).","inputSchema":{"type":"object","properties":{"token_symbol":{"type":"string","description":"Filtra por símbolo del token (opcional)"}},"additionalProperties":false}},{"name":"get_cross_issuer","description":"Líderes de spread entre emisores del mismo subyacente (barato vs caro).","inputSchema":{"type":"object","properties":{"underlying":{"type":"string","description":"Ticker del subyacente (opcional)"}},"additionalProperties":false}},{"name":"get_oracle_latest","description":"Último snapshot del oráculo de fin de semana: precio de apertura del lunes implícito y desviación vs cierre.","inputSchema":{"type":"object","properties":{"underlying":{"type":"string","description":"Ticker del subyacente (opcional)"}},"additionalProperties":false}}]}}

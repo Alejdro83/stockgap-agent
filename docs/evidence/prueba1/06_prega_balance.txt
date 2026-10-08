@@ -1,0 +1,71 @@
+# captured_at_utc: 2026-10-07T19:06:15Z
+# --- eth_getBalance(0x069ac6d8cf3553416fe5a4f0410ebeb758a8f819) [step 1c/E6] ---
+HTTP/2 200 
+date: Wed, 07 Oct 2026 19:06:14 GMT
+content-type: application/json; charset=utf-8
+content-length: 53
+vary: Accept-Encoding
+access-control-allow-credentials: true
+access-control-allow-headers: *
+access-control-allow-methods: POST, GET, OPTIONS
+access-control-allow-origin: *
+access-control-max-age: 600
+x-nr-trace-id: d079edeb78820a1bbc2d655fc2035c0b
+x-frame-options: SAMEORIGIN
+x-xss-protection: 1; mode=block
+x-content-type-options: nosniff
+referrer-policy: origin-when-cross-origin
+strict-transport-security: max-age=31536000; includeSubdomains
+
+{"jsonrpc":"2.0","id":1,"result":"0x429d069189e0000"}
+# --- eth_getBalance(0xb471f1aB267144CF4CFff4800beA3ebC0E08ae64) [step 1c/E6] ---
+HTTP/2 200 
+date: Wed, 07 Oct 2026 19:06:14 GMT
+content-type: application/json; charset=utf-8
+content-length: 53
+vary: Accept-Encoding
+access-control-allow-credentials: true
+access-control-allow-headers: *
+access-control-allow-methods: POST, GET, OPTIONS
+access-control-allow-origin: *
+access-control-max-age: 600
+x-nr-trace-id: 795a3e064be34dd55b211c42b323e20e
+x-frame-options: SAMEORIGIN
+x-xss-protection: 1; mode=block
+x-content-type-options: nosniff
+referrer-policy: origin-when-cross-origin
+strict-transport-security: max-age=31536000; includeSubdomains
+
+{"jsonrpc":"2.0","id":1,"result":"0x429d069189e0000"}
+# --- re-peticion identica: 402 activo (challenge intacto) ---
+HTTP/1.1 402 Payment Required
+date: Wed, 07 Oct 2026 19:06:14 GMT
+server: uvicorn
+content-length: 383
+content-type: application/json
+
+{"x402Version":1,"error":"Pago requerido: envía la prueba de pago en el header X-Payment","accepts":[{"scheme":"exact","network":"eip155:97","asset":"native","payTo":"0xb471f1aB267144CF4CFff4800beA3ebC0E08ae64","maxAmountRequired":"5000000000000000","resource":"/mcp","description":"StockGap MCP: get_spread (pago por llamada)","provider":"local_receipt","maxTimeoutSeconds":1800}]}# --- eth_chainId (MCP_RPC_URL) ---
+HTTP/2 200 
+date: Wed, 07 Oct 2026 19:06:15 GMT
+content-type: application/json; charset=utf-8
+content-length: 40
+vary: Accept-Encoding
+access-control-allow-credentials: true
+access-control-allow-headers: *
+access-control-allow-methods: POST, GET, OPTIONS
+access-control-allow-origin: *
+access-control-max-age: 600
+x-nr-trace-id: ba5886f86649531b4cb38ff6710ec404
+x-frame-options: SAMEORIGIN
+x-xss-protection: 1; mode=block
+x-content-type-options: nosniff
+referrer-policy: origin-when-cross-origin
+strict-transport-security: max-age=31536000; includeSubdomains
+
+{"jsonrpc":"2.0","id":1,"result":"0x61"}
+# --- formula del paso 1c ---
+# buyer_wei(0x069a...f819) = 300000000000000000
+# merchant_wei(0xb471...ae64) = 300000000000000000
+# formula step 1c: merchant == 3e17 + k*5e15 -> delta=0 k=0 ok=True
+# buyer >= 5e15 + gas -> ok=True
+# FORMULA_OK=True
