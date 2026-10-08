@@ -9,7 +9,7 @@
 |---|------|--------|-------|
 | 1 | Public GitHub repo | ⏳ READY, NOT YET PUBLIC | https://github.com/Alejdro83/stockgap-agent — operator flips to public at submission time (go/no-go in morning review) |
 | 2 | License in repo | ✅ DONE | MIT — [LICENSE](../LICENSE) verified present at repo root |
-| 3 | Deployed link **or** judge-runnable instructions | ✅ INSTRUCTIONS READY | `DEPLOYED_URL` (Northflank deploy in progress) — root [README.md](../README.md) quickstart is judge-runnable today |
+| 3 | Deployed link **or** judge-runnable instructions | ✅ INSTRUCTIONS READY | <https://http--stockgap-app--6h2d2gps9lkr.code.run/> (live, verified 200 2026-10-08) — root [README.md](../README.md) quickstart is judge-runnable today |
 | 4 | Demo video (official rule: four minutes or less) | 🎬 SCRIPT READY | [docs/VIDEO_SCRIPT.md](./VIDEO_SCRIPT.md) (target 3:45) — record + upload, then fill `VIDEO_URL` |
 | 5 | Google Form #1 | 📝 DRAFTS READY | fields in §2 below |
 | 6 | Google Form #2 | 📝 DRAFTS READY | fields in §2 below |
@@ -83,7 +83,7 @@ Contract (BSC mainnet): PriceRegistry 0x8d2cf4a56f754d5770985d95aa179ef4d5b9b971
 | Field | Value |
 |---|---|
 | GitHub repo | https://github.com/Alejdro83/stockgap-agent |
-| Deployed demo | `DEPLOYED_URL` (Northflank in progress — swap before submit) |
+| Deployed demo | <https://http--stockgap-app--6h2d2gps9lkr.code.run/> (live) |
 | Video | `VIDEO_URL` (placeholder — swap after upload) |
 | Demo / written walkthrough | Judge-runnable quickstart in the root [README.md](../README.md) (~10 min) + deep-dive [StockGap/README.md](../StockGap/README.md) |
 
@@ -92,7 +92,7 @@ Contract (BSC mainnet): PriceRegistry 0x8d2cf4a56f754d5770985d95aa179ef4d5b9b971
 | # | Field | Question for operator | Status |
 |---|-------|----------------------|--------|
 | A1 | Team members | Real name, role, contact (email/handle) per team member — for the team fields in both forms | ❓ BLOCKING |
-| A2 | BNB wallet (HEX) | Wallet address in HEX (0x…) for the wallet field / potential prize payout | ❓ BLOCKING |
+| A2 | BNB wallet (HEX) | Wallet address in HEX (0x…) for the wallet field / potential prize payout | ✅ RESUELTO 2026-10-07: 0xb471f1aB267144CF4CFff4800beA3ebC0E08ae64 |
 | A3 | Tagline pick | Confirm Option A (198 chars, already in root README) or switch to B/C — see morning review pack | ❓ decision (D2) |
 | A4 | Track confirm | Wording aligned to the real single track **Tokenized Stocks Products & Agents** (official event page, verified 2026-10-07 — "Infrastructure & Tooling"/"Set & Earn" were an older form's options); final confirm against the real form's options = A9 | ❓ decision (D1, gated on A9) |
 | A5 | Public-flip go/no-go | Flip repo public only after deploy URL lands and README placeholders (`DEPLOYED_URL`, `VIDEO_URL`) are replaced | ❓ decision (D4) |

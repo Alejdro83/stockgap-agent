@@ -19,7 +19,7 @@
 | S8 | Numbers | Dashboard or `scripts/summary.py` output: ≈1M rows, p25/50/75 = 5.1/13.5/32.9 bps |
 | S9 | Rigor evidence | `RECOVERY.md` scroll: the three reverted tx hashes + `eth_call` replay section, then BscScan of the successful trade tx (honesty shot) |
 | S10 | BNB + ERC-8004 | MCP response headers showing `X-ERC8004-Identity: erc8004:bsc-mainnet:…` + BscScan of the `PriceRegistry` contract (registry id still a placeholder — swap in the real id if it lands before recording) |
-| S11 | Close | README links row (repo, DEPLOYED_URL) |
+| S11 | Close | README links row (repo, https://http--stockgap-app--6h2d2gps9lkr.code.run/) |
 
 ---
 

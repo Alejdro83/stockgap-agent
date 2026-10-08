@@ -4,7 +4,7 @@
 
 | TODO | Status | Fill in |
 |------|--------|---------|
-| Northflank deploy healthy (`DEPLOYED_URL`) | ⏳ overnight | paste URL: `______________` |
+| Northflank deploy healthy (`DEPLOYED_URL`) | ⏳ overnight | https://http--stockgap-app--6h2d2gps9lkr.code.run/ (verified 200, 2026-10-08) |
 | Smoke-test deployed: `GET /` = 200 + `POST /mcp tools/list` works there | ⏳ | done at: `____:____` |
 | Swap `DEPLOYED_URL` placeholder in root README + SUBMISSION_CHECKLIST links block | ⏳ | commit: `__________` |
 | Record video (script: docs/VIDEO_SCRIPT.md) + upload → `VIDEO_URL` | ⏳ | URL: `______________` |
@@ -16,7 +16,7 @@
 | # | Item |
 |---|------|
 | A1 | Team members: real name, role, contact per person |
-| A2 | BNB wallet address (HEX, 0x…) |
+| A2 | BNB wallet address (HEX, 0x…) — ✅ RESUELTO 2026-10-07: 0xb471f1aB267144CF4CFff4800beA3ebC0E08ae64 |
 | A7 | Video host for upload (YouTube?) |
 | A8 | ~~Testnet oracle writer~~ — ✅ RESOLVED 2026-10-03: real BSC **mainnet** oracle publish (PriceRegistry `0x8d2cf4a5…b971`, deploy tx `0x2235be2b…afa1`, publish tx `0x8055d62e…7cec`); ERC-8004 registry id still pending |
 
@@ -24,7 +24,7 @@
 
 | # | Decision | Options | Recommendation |
 |---|----------|---------|----------------|
-| D1 | **Track confirm** | Infrastructure & Tooling **vs** Set & Earn | **Infrastructure & Tooling** — Set & Earn bonus only counts for BNB Agent Studio agents (justification drafted: checklist §2) |
+| D1 | **Track confirm** | Single track on the official page | **Tokenized Stocks Products & Agents** (verified 2026-10-07; Infrastructure & Tooling / Set & Earn were an older form edition) |
 | D2 | **Tagline pick** | A: "StockGap measures the gap between tokenized-stock prices and their independent reference close — 488 RWA tokens / 30s — and sells signals to agents over a pay-per-call (x402) MCP layer on BNB Chain." (198) · B: "An independent price-gap oracle for tokenized equities on BNB Chain: 488 RWA tokens monitored every 30 seconds, signals monetized for agents via x402 pay-per-call MCP." (167) · C: "Tokenized stocks have two prices — the token's and the underlying's. StockGap measures the gap honestly and turns it into pay-per-call signals for agents on BNB Chain." (167) | **A** (already in root README; most concrete) |
 | D3 | **License confirm** | MIT LICENSE exists at repo root — keep as-is? | **Keep MIT** (mandatory item already satisfied) |
 | D4 | **Public-flip go/no-go** | Flip https://github.com/Alejdro83/stockgap-agent public | Only after D2 lands + `DEPLOYED_URL`/`VIDEO_URL` swapped — repo is judged on first click |

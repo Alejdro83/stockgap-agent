@@ -10,7 +10,7 @@
 Prepared for **BNB Hack: Tokenized Stocks Edition** (submissions lock 2026-10-11 12:00 UTC).
 
 - **Repo:** https://github.com/Alejdro83/stockgap-agent (public at submission time)
-- **Deployed demo:** `DEPLOYED_URL` (placeholder — swap when the Northflank deploy lands; judge-runnable instructions below)
+- **Deployed demo:** <https://http--stockgap-app--6h2d2gps9lkr.code.run/> (Northflank, live; `POST /mcp` `tools/list` is free) — judge-runnable instructions below
 - **Video pitch (≤4 min):** `VIDEO_URL` (placeholder — swap after upload; script in [docs/VIDEO_SCRIPT.md](./docs/VIDEO_SCRIPT.md))
 - **Written demo (judge-runnable, ~10 min):** the [Quickstart](#quickstart-judge-runnable) below runs everything locally; full run notes in [StockGap/README.md](./StockGap/README.md)
 - **Deep-dive README (architecture, verified API details, evidence):** [StockGap/README.md](./StockGap/README.md)
@@ -28,6 +28,7 @@ Prepared for **BNB Hack: Tokenized Stocks Edition** (submissions lock 2026-10-11
 
 ```bash
 git clone https://github.com/Alejdro83/stockgap-agent && cd stockgap-agent
+python3 -m pip install -r requirements.txt
 python3 -m pytest -q          # 392 passed (~2 min wall, measured 2026-10-04)
 mkdir -p data                 # data/ is gitignored
 
@@ -53,8 +54,10 @@ StockGap submits to the hackathon's single track — **Tokenized Stocks Products
 
 - **x402/b402 pay-per-call MCP gate** — HTTP 402 responses carry `x402Version:1`; `local_receipt` verifies an **on-chain BSC payment receipt** before dispatch (paid calls are idempotent by tx hash); Binance's `/api/v2/b402/{supported,verify,settle}` adapter ships mock-tested.
 - **Oracle publish** — `stockgap/onchain_writer.py` publishes the oracle's derived price to a `PriceRegistry` contract on **BSC mainnet** (chain 56): [`0x8d2cf4a56f754d5770985d95aa179ef4d5b9b971`](https://bscscan.com/address/0x8d2cf4a56f754d5770985d95aa179ef4d5b9b971) (deploy tx [`0x2235be2b…afa1`](https://bscscan.com/tx/0x2235be2b3c516f89f4bdb84f199fb774182c424f024a10d1a35569536948afa1)); first publish tx [`0x8055d62e…7cec`](https://bscscan.com/tx/0x8055d62e8667e5564e3ad448a0a5f769285a918ee7f1b05b3ec436ac1dc97cec) (event `OraclePublish`, snapshot ACN priceE8=19962666700). The writer is real but **toggled**: `ORACLE_PUBLISH=0|1` (default 0 = mock DB ledger).
-- **ERC-8004 hooks** — every MCP response carries an `X-ERC8004-Identity` header (`erc8004:bsc-mainnet:REGISTRY_PLACEHOLDER#0` — registry id honestly still pending); `oracle_reputation`/`oracle_feedback` implement the ERC-8004-style reputation/feedback interface with an on-chain attestation stub.
+- **ERC-8004 hooks** — every MCP response carries an `X-ERC8004-Identity` header (`erc8004:bsc-mainnet:REGISTRY_PLACEHOLDER#0` — the header id stays a placeholder until after the lock because changing it means redeploying the live service; the seller agent's real **BSC mainnet ERC-8004 identity is agent #365285**, see [stockgap-seller](https://github.com/Alejdro83/stockgap-seller)); `oracle_reputation`/`oracle_feedback` implement the ERC-8004-style reputation/feedback interface with an on-chain attestation stub.
 - **Demo-trade pipeline** — BSC mainnet (chain 56) via the Binance Web3 aggregator with a strict simulate-before-broadcast gate, a **pre-broadcast calldata deadline gate** (the vendor route deadline is fixed at build+~2 s — no API parameter; probe evidence in `docs/evidence/flash_deadline_probe.json`) and a unified `Executor.quote_and_swap()` path. First successful live trade: [`0xd8ef9e75…a48f`](https://bscscan.com/tx/0xd8ef9e75467ddb27ab97076e3b112fbe4a552488b81dddd09a81bb4cd490a48f) (1 wei BNB→NVDAB dust demo, one attempt).
+
+- **Live mainnet pay-per-call (Prueba 2, 2026-10-08)** — a real 0.005 BNB payment on BSC mainnet unlocked a `get_spread` report through the x402 gate: tx [`0x656e0477…957d`](https://bscscan.com/tx/0x656e0477b5fa3cb0f470c56ef6ec7eb9709047163ae303efb9bcc0a66645957d) (status 0x1), replay of the same hash rejected. Evidence: [docs/evidence/prueba2/](./docs/evidence/prueba2/NOTES.md). The earlier [prueba1](./docs/evidence/prueba1/) run is a **BSC testnet dry-run**, not mainnet evidence.
 
 ## Growth through the BNB ecosystem & Agent Bazaar
 

@@ -224,13 +224,13 @@ stockgap-agent/
 | [mandates/](./mandates/) | generic per-seat charters (kept project-agnostic on purpose) |
 | [DX-LOG.md](./DX-LOG.md) | full developer-experience log — source of truth for project history |
 
-**Deployment honesty:** everything runs on `localhost:8098` on the build machine — **no public URL**. The three demo-trade broadcasts all reverted on-chain (2-second in-calldata route deadline — proven by `eth_call` replay + calldata decode for `0x9ca3…` and `0x7c33…`; **INFERRED** for `0xfdc9…` (identical pattern, not replayed). Min-return was not the cause of the three broadcast reverts — a real simulate failure `Min return not reached` occurred at 1% slippage on the first demo attempt. Full receipts and root-cause chain in [RECOVERY.md](./RECOVERY.md)); no live b402 `binance` settlement was tested (the API account has no b402 merchant provisioned — `/api/v2/b402/*` answers `code=100001008`). Since then the pipeline shipped a **pre-broadcast calldata deadline gate** (`ROUTE_DEADLINE_MARGIN_S`, `BROADCAST_DIRECT`) and tx [`0xd8ef9e75…a48f`](https://bscscan.com/tx/0xd8ef9e75467ddb27ab97076e3b112fbe4a552488b81dddd09a81bb4cd490a48f) (1 wei BNB→NVDAB dust demo, one attempt) is the **first successful live trade** through it; the oracle's on-chain writer is real on BSC mainnet (`PriceRegistry 0x8d2cf4a5…b971`) behind the `ORACLE_PUBLISH=0|1` toggle (default 0 = mock DB ledger).
+**Deployment honesty:** the dashboard + MCP are deployed on Northflank (<https://http--stockgap-app--6h2d2gps9lkr.code.run/>, fed by a local collector + 5-minute shipper because Binance Web3 blocks Northflank egress with `40304`). The three demo-trade broadcasts all reverted on-chain (2-second in-calldata route deadline — proven by `eth_call` replay + calldata decode for `0x9ca3…` and `0x7c33…`; **INFERRED** for `0xfdc9…` (identical pattern, not replayed). Min-return was not the cause of the three broadcast reverts — a real simulate failure `Min return not reached` occurred at 1% slippage on the first demo attempt. Full receipts and root-cause chain in [RECOVERY.md](./RECOVERY.md)); no live b402 `binance` settlement was tested (the API account has no b402 merchant provisioned — `/api/v2/b402/*` answers `code=100001008`). Since then the pipeline shipped a **pre-broadcast calldata deadline gate** (`ROUTE_DEADLINE_MARGIN_S`, `BROADCAST_DIRECT`) and tx [`0xd8ef9e75…a48f`](https://bscscan.com/tx/0xd8ef9e75467ddb27ab97076e3b112fbe4a552488b81dddd09a81bb4cd490a48f) (1 wei BNB→NVDAB dust demo, one attempt) is the **first successful live trade** through it; the oracle's on-chain writer is real on BSC mainnet (`PriceRegistry 0x8d2cf4a5…b971`) behind the `ORACLE_PUBLISH=0|1` toggle (default 0 = mock DB ledger).
 
 ## 📜 License
 
 MIT — see [LICENSE](./LICENSE).
 
-<!-- ENTRY-URLS: TODO(alex): track + per-stage URLs -->
+<!-- Track: Tokenized Stocks Products & Agents · Deployed: https://http--stockgap-app--6h2d2gps9lkr.code.run/ -->
 
 <details>
 <summary><b>Signing spec & verified request details (Day-0, verified live)</b></summary>
