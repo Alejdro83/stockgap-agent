@@ -1,0 +1,8 @@
+{
+  "tx_hash": "0x656e0477b5fa3cb0f470c56ef6ec7eb9709047163ae303efb9bcc0a66645957d",
+  "payer": "0x069ac6d8cf3553416fe5a4f0410ebeb758a8f819",
+  "amount": "5000000000000000",
+  "tool": "get_spread",
+  "provider": "local_receipt",
+  "paid_at": "2026-10-08T02:21:32Z"
+}

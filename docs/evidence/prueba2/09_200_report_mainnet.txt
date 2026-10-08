@@ -1,0 +1,16 @@
+{
+  "metric": "spread_bps_real",
+  "tick_ts": "2026-10-07T18:56:03.349Z",
+  "rows": [
+    {
+      "token_symbol": "NVDAon",
+      "underlying_ticker": "NVDA",
+      "platform_id": "ondo",
+      "token_price": 237.12460224389616,
+      "reference_price": 236.718571,
+      "market_status": "regular",
+      "open_state": 1,
+      "metric_bps": -8.783153030052754
+    }
+  ]
+}

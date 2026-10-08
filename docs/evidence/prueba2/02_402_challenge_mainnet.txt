@@ -1,0 +1,17 @@
+{
+  "x402Version": 1,
+  "error": "Pago requerido: env\u00eda la prueba de pago en el header X-Payment",
+  "accepts": [
+    {
+      "scheme": "exact",
+      "network": "eip155:56",
+      "asset": "native",
+      "payTo": "0xb471f1aB267144CF4CFff4800beA3ebC0E08ae64",
+      "maxAmountRequired": "5000000000000000",
+      "resource": "/mcp",
+      "description": "StockGap MCP: get_spread (pago por llamada)",
+      "provider": "local_receipt",
+      "maxTimeoutSeconds": 1800
+    }
+  ]
+}
