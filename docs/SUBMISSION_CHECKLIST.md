@@ -33,13 +33,13 @@ An independent price-gap oracle for tokenized equities on BNB Chain: 488 RWA tok
 Tokenized stocks have two prices — the token's and the underlying's. StockGap measures the gap honestly and turns it into pay-per-call signals for agents on BNB Chain.
 ```
 
-### Detailed description — limit 2000 — **1991 chars** (truth pass 2026-10-03: testnet/pending claims replaced with verified mainnet facts; text was over the limit and was trimmed to fit)
+### Detailed description — limit 2000 — **1999 chars** (truth pass 2026-10-03: testnet/pending claims replaced with verified mainnet facts; text was over the limit and was trimmed to fit)
 ```
 Tokenized stocks trade on-chain; the underlying share trades on a traditional exchange - and almost nobody measures the gap honestly. Naive derived-pair spreads are structurally ~0 (the reference is computed from the token price itself) - a fake peg. StockGap fixes this with an independent per-share close and full provenance per row.
 
-What it does: (1) a rate-limit-aware collector polls 488 RWA tokens (442 Ondo + 46 BStock) every 30s and stores price/reference ticks; (2) a spread engine normalizes by tokenToShareRatio (1 token != 1 share; ratios 0.0667-10.03) and reports spread_bps_real against the independent close; (3) a threshold-crossing alert scanner with rate limiting and digest mode; (4) a mobile-first dashboard (FastAPI + HTMX, SQLite read-only) on localhost:8098; (5) a weekend oracle predicting Monday's implied open vs the last independent close, with deviation flags and an ERC-8004-style reputation loop; (6) an MCP server (JSON-RPC 2.0) whose read tools sit behind an x402/b402 pay-per-call gate - 402 responses carry x402Version:1, payments verified as on-chain receipts (local_receipt) or Binance settlement; every MCP response carries an ERC-8004-style identity header, and the oracle publishes its derived price to an on-chain PriceRegistry on BSC mainnet (ORACLE_PUBLISH toggle).
+What it does: (1) a rate-limited collector polls 488 RWA tokens (442 Ondo + 46 BStock) every 30s and stores price/reference ticks; (2) a spread engine normalizes by tokenToShareRatio (1 token != 1 share; ratios 0.0667-10.03) and reports spread_bps_real against the independent close; (3) a threshold-crossing alert scanner with rate limiting and digest mode; (4) a mobile-first dashboard (FastAPI + HTMX, SQLite read-only) on localhost:8098; (5) a weekend oracle predicting Monday's implied open vs the last independent close, with deviation flags and an ERC-8004-style reputation loop; (6) an MCP server (JSON-RPC 2.0) whose read tools sit behind an x402/b402 pay-per-call gate - 402 responses carry x402Version:1, payments verified as on-chain receipts (local_receipt) or Binance settlement; every MCP response carries an ERC-8004-style identity header, and the oracle publishes its derived price to an on-chain PriceRegistry on BSC mainnet (ORACLE_PUBLISH toggle).
 
-Honest numbers (2026-10-03): ~1.0M spread_ticks rows; |spread| p25/p50/p75 = 5.1/13.5/32.9 bps (abs>0.5 filter, n~477K); 488 RWA + 40 cross-issuer pairs per 30s tick; 442 underlyings with an independent close; 416 passing tests (+2 skipped, @ d6de0a5). Honest limits: three early demo-trade broadcasts reverted (2s route deadline, root cause in RECOVERY.md) - the pipeline now has a pre-broadcast deadline gate and the first live trade succeeded (1 wei dust demo); the on-chain oracle writer is real on BSC mainnet but toggled off by default (mock DB ledger); live b402 binance settlement is mock-tested only and the API account has no b402 merchant provisioned. Built by a three-seat multi-agent factory.
+Honest numbers (2026-10-10): ~12.1M spread_ticks rows; |spread| p25/p50/p75 = 4.7/12.3/29.0 bps (abs>0.5 filter, n~4.76M); 488 RWA + 40 cross-issuer pairs per 30s tick; 442 underlyings with an independent close; 416 passing tests (+2 skipped, @ d6de0a5). Honest limits: three early demo-trade broadcasts reverted (2s route deadline, cause in RECOVERY.md) - the pipeline now has a pre-broadcast deadline gate and the first live trade succeeded (1 wei dust demo); the on-chain oracle writer is real on BSC mainnet but toggled off by default (mock DB ledger); b402 binance settlement is mock-tested only and the account has no b402 merchant provisioned. Built by a three-seat multi-agent factory.
 ```
 
 ### Written demo — limit 1500 — **1226 chars**
@@ -104,7 +104,7 @@ Contract (BSC mainnet): PriceRegistry 0x8d2cf4a56f754d5770985d95aa179ef4d5b9b971
 | Field | Limit | Used |
 |---|---|---|
 | One-liner A / B / C | 200 | 198 / 167 / 167 |
-| Detailed description | 2000 | 1991 (truth-passed; trimmed from an over-limit draft) |
+| Detailed description | 2000 | 1999 (re-measured 2026-10-10 with fresh honest numbers; trimmed to fit again) |
 | Written demo | 1500 | 1226 |
 | Track justification | (no limit given) | 519 |
 | Tech stack | (no limit given) | 456 |

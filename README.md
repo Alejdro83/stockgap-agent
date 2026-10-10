@@ -63,12 +63,12 @@ StockGap submits to the hackathon's single track — **Tokenized Stocks Products
 
 StockGap is the independent price-gap data layer that tokenized-stock issuers and market makers lack — as RWA listings on BNB Chain grow, every issuer needs a peg monitor and every agent needs machine-readable, payable signals. Agent Bazaar is the natural storefront: StockGap lists its MCP tools as pay-per-call services (x402 receipts settle in BNB), agents discover, call and pay autonomously, and the ERC-8004 reputation loop gives buyers a verifiable track record. Roadmap: more issuers/venues, per-issuer alert subscriptions, BNB-settled plans, staked oracle attestations.
 
-## Honest numbers (2026-10-03)
+## Honest numbers (2026-10-10)
 
 | Metric | Value |
 |---|---|
-| spread_ticks rows | ≈1.0M (999,336 at check time, live collector) |
-| \|spread\| p25 / p50 / p75 | 5.1 / 13.5 / 32.9 bps (abs > 0.5 filter, n ≈ 477K) |
+| spread_ticks rows | ≈12.1M (12,076,686 at check time, live collector) |
+| \|spread\| p25 / p50 / p75 | 4.7 / 12.3 / 29.0 bps (abs > 0.5 filter, n ≈ 4.76M) |
 | Per 30s tick | 488 RWA + 40 cross-issuer pairs |
 | Oracle coverage | 442 underlyings with an independent close |
 | Tests | 416 passed, 2 skipped (`pytest -q` @ `d6de0a5`) |
