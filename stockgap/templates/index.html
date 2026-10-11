@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -21,53 +21,53 @@
       <span class="text-xs opacity-80">render {{ now_utc }}</span>
     </div>
     <p class="text-xs max-w-lg mx-auto mt-1 opacity-90">
-      Monitor de spreads de acciones tokenizadas · auto-refresh 30s
+      Tokenized-stock spread monitor · auto-refresh 30s
     </p>
   </header>
 
   <nav class="max-w-lg mx-auto grid grid-cols-4 gap-1 p-2 bg-white shadow">
     <button class="tabbtn active border-b-2 py-2 text-sm font-semibold rounded-t" data-tab="gaps">Gaps</button>
     <button class="tabbtn border-b-2 py-2 text-sm font-semibold rounded-t text-gray-500" data-tab="cross">Cross-issuer</button>
-    <button class="tabbtn border-b-2 py-2 text-sm font-semibold rounded-t text-gray-500" data-tab="oraculo">Oráculo</button>
-    <button class="tabbtn border-b-2 py-2 text-sm font-semibold rounded-t text-gray-500" data-tab="sistema">Sistema</button>
+    <button class="tabbtn border-b-2 py-2 text-sm font-semibold rounded-t text-gray-500" data-tab="oraculo">Oracle</button>
+    <button class="tabbtn border-b-2 py-2 text-sm font-semibold rounded-t text-gray-500" data-tab="sistema">System</button>
   </nav>
 
   <main class="max-w-lg mx-auto p-2">
-    <p id="cdn-warn" class="hidden bg-red-100 border border-red-400 text-red-800 rounded p-2 text-sm mb-2" role="alert">⚠️ No se pudo cargar HTMX (¿sin internet o CDN bloqueado?). Los datos no se actualizarán; recarga la página.</p>
+    <p id="cdn-warn" class="hidden bg-red-100 border border-red-400 text-red-800 rounded p-2 text-sm mb-2" role="alert">⚠️ Could not load HTMX (offline or CDN blocked?). Data will not refresh; reload the page.</p>
 
     <section id="pane-gaps" class="tabpane active">
       <div id="pane-gaps-body" hx-get="/frag/gaps" hx-vals='js:{closed_only: window.closedOnly || 0}' hx-trigger="load, every 30s, gapsrefresh" hx-swap="innerHTML">
-        <p class="text-center text-gray-500 py-6">⏳ Cargando Gaps…</p>
+        <p class="text-center text-gray-500 py-6">⏳ Loading Gaps…</p>
       </div>
     </section>
 
     <section id="pane-cross" class="tabpane">
       <div hx-get="/frag/cross" hx-trigger="load, every 30s" hx-swap="innerHTML">
-        <p class="text-center text-gray-500 py-6">⏳ Cargando Cross-issuer…</p>
+        <p class="text-center text-gray-500 py-6">⏳ Loading Cross-issuer…</p>
       </div>
     </section>
 
     <section id="pane-oraculo" class="tabpane">
       <div hx-get="/frag/oraculo" hx-trigger="load, every 30s" hx-swap="innerHTML">
-        <p class="text-center text-gray-500 py-6">⏳ Cargando Oráculo…</p>
+        <p class="text-center text-gray-500 py-6">⏳ Loading Oracle…</p>
       </div>
     </section>
 
     <section id="pane-sistema" class="tabpane">
       <div hx-get="/frag/sistema" hx-trigger="load, every 30s" hx-swap="innerHTML">
-        <p class="text-center text-gray-500 py-6">⏳ Cargando Sistema…</p>
+        <p class="text-center text-gray-500 py-6">⏳ Loading System…</p>
       </div>
     </section>
   </main>
 
   <footer class="text-center text-xs text-gray-400 py-4">
-    StockGap · lectura SQLite read-only · demo hackathon
+    StockGap · read-only SQLite · hackathon demo
   </footer>
 
   <script>
     setTimeout(() => { if (!window.htmx) document.getElementById("cdn-warn").classList.remove("hidden"); }, 6000);
-    document.body.addEventListener("htmx:responseError", e => { e.target.innerHTML = '<p class="bg-red-100 text-red-800 rounded p-2 text-sm">⚠️ El servidor respondió con error (' + e.detail.xhr.status + '). Reintentando en 30s.</p>'; });
-    document.body.addEventListener("htmx:sendError", e => { e.target.innerHTML = '<p class="bg-red-100 text-red-800 rounded p-2 text-sm">⚠️ Sin conexión con el servidor. Reintentando en 30s.</p>'; });
+    document.body.addEventListener("htmx:responseError", e => { e.target.innerHTML = '<p class="bg-red-100 text-red-800 rounded p-2 text-sm">⚠️ The server returned an error (' + e.detail.xhr.status + '). Retrying in 30s.</p>'; });
+    document.body.addEventListener("htmx:sendError", e => { e.target.innerHTML = '<p class="bg-red-100 text-red-800 rounded p-2 text-sm">⚠️ No connection to the server. Retrying in 30s.</p>'; });
     document.querySelectorAll('.tabbtn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.tabbtn').forEach(b => {

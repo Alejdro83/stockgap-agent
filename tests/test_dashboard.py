@@ -61,7 +61,7 @@ def client_for(tmp_path, monkeypatch):
 def test_index_has_tabs_and_loading_text(client_for):
     r = client_for().get("/")
     assert r.status_code == 200
-    for t in ("Gaps", "Cross-issuer", "Oráculo", "Sistema", "Cargando"):
+    for t in ("Gaps", "Cross-issuer", "Oracle", "System", "Loading"):
         assert t in r.text
 
 
@@ -93,38 +93,38 @@ def test_cross(client_for):
 def test_oraculo_explainer_count_and_no_reputation(client_for):
     r = client_for().get("/frag/oraculo")
     assert r.status_code == 200
-    assert "mientras el mercado duerme" in r.text and "predicciones hoy" in r.text
-    assert "Todavía no hay puntuación" in r.text
+    assert "while the market sleeps" in r.text and "predictions today" in r.text
+    assert "No score yet" in r.text
 
 
 def test_oraculo_with_reputation(client_for):
     r = client_for(reputation=True).get("/frag/oraculo")
-    assert "AAAon" in r.text and "Todavía no hay puntuación" not in r.text
+    assert "AAAon" in r.text and "No score yet" not in r.text
 
 
 def test_sistema_green_txs_and_root_cause(client_for):
     r = client_for(age_s=10).get("/frag/sistema")
     assert r.status_code == 200
-    assert "GREEN" in r.text and "OK — último tick" in r.text and "Datos desactualizados" not in r.text
+    assert "GREEN" in r.text and "OK — last tick" in r.text and "Stale data" not in r.text
     for h in dashboard.REAL_TXS:
         assert h in r.text
     assert r.text.count("REVERTED") == 3
-    assert "caducidad de ruta de 2s embebida en el calldata" in r.text
+    assert "2-second route expiry embedded in the calldata" in r.text
     assert "SPREAD_THRESHOLD_BPS" in r.text
 
 
 def test_sistema_stale_is_red_with_warning(client_for):
     r = client_for(age_s=900).get("/frag/sistema")
-    assert "RED" in r.text and "ESTANCADO" in r.text and "Datos desactualizados" in r.text
+    assert "RED" in r.text and "STALLED" in r.text and "Stale data" in r.text
 
 
 def test_empty_db_renders_friendly_messages(client_for):
     c = client_for(rows=False)
-    assert "Aún no hay ticks" in c.get("/frag/gaps").text
-    assert "Sin datos cross-issuer" in c.get("/frag/cross").text
-    assert "Aún no hay predicciones" in c.get("/frag/oraculo").text
+    assert "No collector ticks yet" in c.get("/frag/gaps").text
+    assert "No cross-issuer data" in c.get("/frag/cross").text
+    assert "No oracle predictions yet" in c.get("/frag/oraculo").text
     r = c.get("/frag/sistema")
-    assert r.status_code == 200 and "SIN DATOS" in r.text
+    assert r.status_code == 200 and "NO DATA" in r.text
 
 
 def test_missing_db_shows_error_banner_not_crash(tmp_path, monkeypatch):
@@ -132,7 +132,7 @@ def test_missing_db_shows_error_banner_not_crash(tmp_path, monkeypatch):
     c = TestClient(dashboard.app)
     for p in ("gaps", "cross", "oraculo", "sistema"):
         r = c.get(f"/frag/{p}")
-        assert r.status_code == 200 and "Error de datos" in r.text
+        assert r.status_code == 200 and "Data error" in r.text
 
 
 def test_garbage_db_shows_error_banner(tmp_path, monkeypatch):
@@ -140,7 +140,7 @@ def test_garbage_db_shows_error_banner(tmp_path, monkeypatch):
     bad.write_bytes(b"not a sqlite file" * 100)
     monkeypatch.setenv("STOCKGAP_DB", str(bad))
     r = TestClient(dashboard.app).get("/frag/gaps")
-    assert r.status_code == 200 and "Error de datos" in r.text
+    assert r.status_code == 200 and "Data error" in r.text
 
 
 def test_health_badge_levels():
@@ -148,3 +148,15 @@ def test_health_badge_levels():
     assert dashboard.health_badge(200)["level"] == "YELLOW"
     assert dashboard.health_badge(400)["level"] == "RED"
     assert dashboard.health_badge(None)["level"] == "RED"
+
+
+def test_gaps_independent_rows_show_the_numbers_behind_the_real_spread(client_for, tmp_path):
+    c = client_for(extra_cols=", spread_bps_real TEXT, reference_kind TEXT, reference_close_independent TEXT")
+    con = sqlite3.connect(tmp_path / "t.db")
+    con.execute("UPDATE spread_ticks SET reference_kind='independent', reference_close_independent='123.4567', "
+                "implied_share_price='120.0', spread_bps_real='-279.0' WHERE token_symbol='AAAon'")
+    con.commit()
+    con.close()
+    r = c.get("/frag/gaps")
+    assert "independent close 123.4567" in r.text and "120.0000 per share" in r.text
+    assert "vs ref 9.5000" in r.text  # the non-independent row keeps the old line

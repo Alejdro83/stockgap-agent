@@ -37,7 +37,7 @@ REAL_TXS = [
     "0x7c3379a18636c68c3bb0dc23dbcee6fefcff916baf74c1302ae4a88c4817446f",
 ]
 TX_STATUS = "REVERTED"
-TX_ROOT_CAUSE = "caducidad de ruta de 2s embebida en el calldata — quirk no documentado"
+TX_ROOT_CAUSE = "2-second route expiry embedded in the calldata — undocumented quirk"
 
 ALERT_KEYS = [
     "SPREAD_THRESHOLD_BPS", "CROSS_ISSUER_THRESHOLD_BPS", "ALERT_RATE_LIMIT_MIN",
@@ -93,7 +93,7 @@ def _age_s(ts: str | None) -> float | None:
 
 def fmt_age(age: float | None) -> str:
     if age is None:
-        return "sin dato"
+        return "n/a"
     age = int(age)
     if age < 90:
         return f"{age}s"
@@ -106,12 +106,12 @@ def fmt_age(age: float | None) -> str:
 
 def health_badge(age: float | None) -> dict:
     if age is None:
-        return {"level": "RED", "text": "SIN DATOS: el collector nunca registró un tick"}
+        return {"level": "RED", "text": "NO DATA: the collector has never recorded a tick"}
     if age <= GREEN_MAX_S:
-        return {"level": "GREEN", "text": f"OK — último tick hace {fmt_age(age)}"}
+        return {"level": "GREEN", "text": f"OK — last tick {fmt_age(age)} ago"}
     if age <= STALE_AFTER_S:
-        return {"level": "YELLOW", "text": f"RETARDO — último tick hace {fmt_age(age)}"}
-    return {"level": "RED", "text": f"ESTANCADO — último tick hace {fmt_age(age)} (>5 min)"}
+        return {"level": "YELLOW", "text": f"DELAYED — last tick {fmt_age(age)} ago"}
+    return {"level": "RED", "text": f"STALLED — last tick {fmt_age(age)} ago (>5 min)"}
 
 
 def fnum(v, nd: int = 2):
@@ -136,7 +136,7 @@ def with_db(fn):
     def wrapper(*args, **kwargs):
         path = get_db_path()
         if not path.exists():
-            raise DbError(f"No se pudo leer la base de datos: {path.name} no existe.")
+            raise DbError(f"Could not read the database: {path.name} does not exist.")
         try:
             conn = db.connect_ro(path, timeout=5)
             conn.row_factory = sqlite3.Row
@@ -145,7 +145,7 @@ def with_db(fn):
             finally:
                 conn.close()
         except sqlite3.Error as exc:
-            raise DbError(f"No se pudo leer la base de datos ({exc}).") from exc
+            raise DbError(f"Could not read the database ({exc}).") from exc
 
     return wrapper
 
@@ -195,6 +195,8 @@ def gaps_data(conn, closed_only: bool) -> dict:
     expr = (f"COALESCE(CAST({metric} AS REAL), CAST(spread_bps AS REAL))"
             if metric != "spread_bps" else "CAST(spread_bps AS REAL)")
     kind = ", reference_kind" if "reference_kind" in cols else ""
+    # Independent-close fields let the card show the numbers the real spread is computed from.
+    kind += "".join(f", {c}" for c in ("implied_share_price", "reference_close_independent") if c in cols)
     closed = " AND COALESCE(open_state, 0) = 0" if closed_only else ""
     sql = (f"SELECT token_symbol, underlying_ticker, platform_id, token_price, "
            f"token_to_share_ratio, reference_price, market_status, open_state, "
