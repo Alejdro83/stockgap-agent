@@ -134,17 +134,17 @@ def tool_get_oracle_latest(conn, args: dict) -> dict:
 
 TOOLS: dict[str, tuple[str, dict, Callable]] = {
     "get_spread": (
-        "Mayores spreads actuales (bps) entre el token tokenizado y su subyacente; "
-        "`metric` indica la métrica usada (spread_bps_real si existe, si no spread_bps).",
-        {"token_symbol": {"type": "string", "description": "Filtra por símbolo del token (opcional)"}},
+        "Largest current spreads (bps) between the tokenized stock and its underlying; "
+        "`metric` states the metric used (spread_bps_real when available, otherwise spread_bps).",
+        {"token_symbol": {"type": "string", "description": "Filter by token symbol (optional)"}},
         tool_get_spread),
     "get_cross_issuer": (
-        "Líderes de spread entre emisores del mismo subyacente (barato vs caro).",
-        {"underlying": {"type": "string", "description": "Ticker del subyacente (opcional)"}},
+        "Spread leaders across issuers of the same underlying (cheap vs rich).",
+        {"underlying": {"type": "string", "description": "Underlying ticker (optional)"}},
         tool_get_cross_issuer),
     "get_oracle_latest": (
-        "Último snapshot del oráculo de fin de semana: precio de apertura del lunes implícito y desviación vs cierre.",
-        {"underlying": {"type": "string", "description": "Ticker del subyacente (opcional)"}},
+        "Latest weekend-oracle snapshot: implied Monday-open price and deviation vs the last independent close.",
+        {"underlying": {"type": "string", "description": "Underlying ticker (optional)"}},
         tool_get_oracle_latest),
 }
 
@@ -188,9 +188,9 @@ async def mcp_endpoint(request: Request):
     try:
         msg = await request.json()
     except ValueError:
-        return reply(_err(None, -32700, "JSON inválido"))
+        return reply(_err(None, -32700, "Invalid JSON"))
     if not isinstance(msg, dict) or msg.get("jsonrpc") != "2.0" or not isinstance(msg.get("method"), str):
-        return reply(_err(None, -32600, "Solicitud JSON-RPC inválida"))
+        return reply(_err(None, -32600, "Invalid JSON-RPC request"))
     id_, method = msg.get("id"), msg["method"]
     params = msg.get("params") or {}
     if "id" not in msg:  # notification
@@ -205,11 +205,11 @@ async def mcp_endpoint(request: Request):
     if method == "tools/call":
         name, args = params.get("name"), params.get("arguments") or {}
         if name not in TOOLS or not isinstance(args, dict):
-            return reply(_err(id_, -32602, f"Herramienta desconocida o argumentos inválidos: {name}"))
+            return reply(_err(id_, -32602, f"Unknown tool or invalid arguments: {name}"))
         decision = gate.check(request.headers.get("x-payment"), name, str(request.url.path))
         if not decision.allowed:
             return reply(decision.body, decision.status)
         if decision.proof_id:
             gate.identity.record_call(tool=name, payer=decision.payer, tx_hash=decision.proof_id)
         return reply(_ok(id_, run_tool(name, args)))
-    return reply(_err(id_, -32601, f"Método no encontrado: {method}"))
+    return reply(_err(id_, -32601, f"Method not found: {method}"))

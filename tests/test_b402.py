@@ -67,17 +67,17 @@ def test_receipt_rejects_failed_status():
 
 def test_receipt_rejects_wrong_recipient():
     r = g.verify_receipt(TX, cfg(), fake_rpc(to="0x" + "22" * 20))
-    assert not r.ok and "destinatario" in r.reason
+    assert not r.ok and "recipient" in r.reason
 
 
 def test_receipt_rejects_underpay():
     r = g.verify_receipt(TX, cfg(), fake_rpc(value=PRICE - 1))
-    assert not r.ok and "monto" in r.reason
+    assert not r.ok and "insufficient amount" in r.reason
 
 
 def test_receipt_rejects_old_block():
     r = g.verify_receipt(TX, cfg(), fake_rpc(age_s=7200))
-    assert not r.ok and "antig" in r.reason
+    assert not r.ok and "too old" in r.reason
 
 
 def test_receipt_rejects_unknown_tx_and_bad_hash():
@@ -129,14 +129,14 @@ def test_no_proof_returns_402_requirements(tmp_path):
     assert not d.allowed and d.status == 402
     acc = d.body["accepts"][0]
     assert acc["payTo"] == MERCHANT and acc["maxAmountRequired"] == str(PRICE)
-    assert acc["asset"] == "native" and d.body["x402Version"] == 1 and "Pago requerido" in d.body["error"]
+    assert acc["asset"] == "native" and d.body["x402Version"] == 1 and "Payment required" in d.body["error"]
 
 
 def test_valid_proof_allows_then_replay_rejected(tmp_path):
     gt = gate(tmp_path)
     assert gt.check(TX, "get_spread", "/mcp").allowed
     d2 = gt.check(TX, "get_spread", "/mcp")
-    assert not d2.allowed and d2.status == 402 and "ya fue usado" in d2.body["error"]
+    assert not d2.allowed and d2.status == 402 and "already used" in d2.body["error"]
 
 
 def test_invalid_proof_402_and_not_consumed(tmp_path):
@@ -212,7 +212,7 @@ def test_binance_without_credentials_gives_clear_402_not_crash(tmp_path):
     gt = g.Gate(cfg(provider="binance"), str(tmp_path / "d.db"), binance=None)
     gt._binance_factory = lambda: (_ for _ in ()).throw(FileNotFoundError("x"))
     d = gt.check(proof, "get_spread", "/mcp")
-    assert d.status == 402 and "credenciales" in d.body["error"]
+    assert d.status == 402 and "credentials" in d.body["error"]
 
 
 # ---- identity stub ----

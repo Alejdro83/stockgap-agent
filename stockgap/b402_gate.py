@@ -131,35 +131,35 @@ def verify_receipt(tx_hash: str, cfg: GateConfig, rpc: Callable[[str, list], Any
                    now: Optional[float] = None) -> VerifyResult:
     """Verify a payment tx: status 0x1, to == merchant, value >= price, recent block."""
     if not isinstance(tx_hash, str) or not TX_RE.match(tx_hash):
-        return VerifyResult(False, "tx hash inválido")
+        return VerifyResult(False, "invalid tx hash")
     merchant = cfg.merchant.lower()
     try:
         tx = rpc("eth_getTransactionByHash", [tx_hash])
         rcpt = rpc("eth_getTransactionReceipt", [tx_hash])
         if not tx or not rcpt:
-            return VerifyResult(False, "transacción no encontrada o aún sin recibo")
+            return VerifyResult(False, "transaction not found or no receipt yet")
         if rcpt.get("status") != "0x1":
-            return VerifyResult(False, f"status del recibo {rcpt.get('status')} (no exitosa)")
+            return VerifyResult(False, f"receipt status {rcpt.get('status')} (not successful)")
         if cfg.asset == "native":
             to, amount = (tx.get("to") or "").lower(), _hex(tx.get("value"))
         else:
             data = tx.get("input") or ""
             if (tx.get("to") or "").lower() != cfg.asset.lower() or not data.startswith(ERC20_TRANSFER) \
                     or len(data) < 10 + 128:
-                return VerifyResult(False, "no es una transferencia del token aceptado")
+                return VerifyResult(False, "not a transfer of the accepted token")
             to = "0x" + data[10:74][-40:].lower()
             amount = int(data[74:138], 16)
         if to != merchant:
-            return VerifyResult(False, "destinatario distinto del comercio")
+            return VerifyResult(False, "recipient is not the merchant")
         if amount < cfg.price_wei:
-            return VerifyResult(False, f"monto insuficiente ({amount} < {cfg.price_wei})")
+            return VerifyResult(False, f"insufficient amount ({amount} < {cfg.price_wei})")
         block = rpc("eth_getBlockByNumber", [rcpt.get("blockNumber"), False])
         age = (time.time() if now is None else now) - _hex((block or {}).get("timestamp"))
         if age > cfg.max_block_age_s:
-            return VerifyResult(False, f"pago demasiado antiguo ({int(age)}s > {cfg.max_block_age_s}s)")
+            return VerifyResult(False, f"payment too old ({int(age)}s > {cfg.max_block_age_s}s)")
         return VerifyResult(True, payer=tx.get("from"), amount=amount)
     except Exception as exc:  # network/RPC failure => reject, never crash the endpoint
-        return VerifyResult(False, f"error de RPC: {type(exc).__name__}")
+        return VerifyResult(False, f"RPC error: {type(exc).__name__}")
 
 
 # --------------------------------------------------------------------------- idempotency
@@ -252,7 +252,7 @@ class Gate:
     def requirements(self, resource: str, tool: str) -> dict:
         return {"scheme": "exact", "network": self.cfg.network, "asset": self.cfg.asset,
                 "payTo": self.cfg.merchant, "maxAmountRequired": str(self.cfg.price_wei),
-                "resource": resource, "description": f"StockGap MCP: {tool} (pago por llamada)",
+                "resource": resource, "description": f"StockGap MCP: {tool} (pay per call)",
                 "provider": self.cfg.provider, "maxTimeoutSeconds": self.cfg.max_block_age_s}
 
     def _deny(self, resource: str, tool: str, error: str) -> Decision:
@@ -264,42 +264,42 @@ class Gate:
             return Decision(True)
         proof = (proof or "").strip()
         if not proof:
-            return self._deny(resource, tool, "Pago requerido: envía la prueba de pago en el header X-Payment")
+            return self._deny(resource, tool, "Payment required: send the payment proof in the X-Payment header")
         paid = PaidCalls(self.db_path)
         if self.cfg.provider == "binance":
             return self._check_binance(proof, tool, resource, paid)
         if not TX_RE.match(proof):
-            return self._deny(resource, tool, "Prueba inválida: se esperaba un tx hash 0x… de 32 bytes")
+            return self._deny(resource, tool, "Invalid proof: expected a 0x… 32-byte tx hash")
         if paid.is_used(proof):
-            return self._deny(resource, tool, "Este tx hash ya fue usado para una llamada anterior")
+            return self._deny(resource, tool, "This tx hash was already used for a previous call")
         rpc = self._rpc or json_rpc(self.cfg.rpc_url)
         res = verify_receipt(proof, self.cfg, rpc)
         if not res.ok:
-            return self._deny(resource, tool, f"Pago rechazado: {res.reason}")
+            return self._deny(resource, tool, f"Payment rejected: {res.reason}")
         if not paid.claim(proof, res.payer, res.amount, tool):  # lost a race with a concurrent replay
-            return self._deny(resource, tool, "Este tx hash ya fue usado para una llamada anterior")
+            return self._deny(resource, tool, "This tx hash was already used for a previous call")
         return Decision(True, payer=res.payer, proof_id=proof)
 
     def _check_binance(self, proof: str, tool: str, resource: str, paid: PaidCalls) -> Decision:
         try:
             payload = json.loads(base64.b64decode(proof, validate=True))
         except Exception:
-            return self._deny(resource, tool, "Prueba inválida: se esperaba JSON en base64 (payload b402)")
+            return self._deny(resource, tool, "Invalid proof: expected base64 JSON (b402 payload)")
         proof_id = "b402:" + hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
         if paid.is_used(proof_id):
-            return self._deny(resource, tool, "Este pago ya fue usado para una llamada anterior")
+            return self._deny(resource, tool, "This payment was already used for a previous call")
         try:
             adapter = self._binance or self._binance_factory()
         except Exception:
-            return self._deny(resource, tool, "Proveedor Binance b402 no disponible: faltan credenciales del comercio")
+            return self._deny(resource, tool, "Binance b402 provider unavailable: merchant credentials missing")
         reqs = self.requirements(resource, tool)
         v = adapter.verify(payload, reqs)
         if not v.get("isValid"):
-            return self._deny(resource, tool, f"Pago rechazado: {v.get('invalidReason') or v.get('_error') or 'inválido'}")
+            return self._deny(resource, tool, f"Payment rejected: {v.get('invalidReason') or v.get('_error') or 'invalid'}")
         if not paid.claim(proof_id, v.get("payer"), self.cfg.price_wei, tool, "binance"):
-            return self._deny(resource, tool, "Este pago ya fue usado para una llamada anterior")
+            return self._deny(resource, tool, "This payment was already used for a previous call")
         s = adapter.settle(payload, reqs)
         if not s.get("success"):
             paid.release(proof_id)  # nothing moved on-chain: let the buyer retry
-            return self._deny(resource, tool, f"Liquidación fallida: {s.get('errorReason') or s.get('_error') or 'sin detalle'}")
+            return self._deny(resource, tool, f"Settlement failed: {s.get('errorReason') or s.get('_error') or 'no detail'}")
         return Decision(True, payer=v.get("payer"), proof_id=proof_id)
