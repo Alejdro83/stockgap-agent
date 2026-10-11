@@ -10,7 +10,7 @@
 | 1 | Public GitHub repo | ⏳ READY, NOT YET PUBLIC | https://github.com/Alejdro83/stockgap-agent — operator flips to public at submission time (go/no-go in morning review) |
 | 2 | License in repo | ✅ DONE | MIT — [LICENSE](../LICENSE) verified present at repo root |
 | 3 | Deployed link **or** judge-runnable instructions | ✅ INSTRUCTIONS READY | <https://http--stockgap-app--6h2d2gps9lkr.code.run/> (live, verified 200 2026-10-08) — root [README.md](../README.md) quickstart is judge-runnable today |
-| 4 | Demo video (official rule: four minutes or less) | 🎬 SCRIPT READY | [docs/VIDEO_SCRIPT.md](./VIDEO_SCRIPT.md) (target 3:45) — record + upload, then fill `VIDEO_URL` |
+| 4 | Demo video (official rule: four minutes or less) | ✅ DONE | <https://youtu.be/vQEqXFPtVyE> — 2:22 (well under the 4:00 limit) |
 | 5 | Google Form #1 | 📝 DRAFTS READY | fields in §2 below |
 | 6 | Google Form #2 | 📝 DRAFTS READY | fields in §2 below |
 
@@ -84,7 +84,7 @@ Contract (BSC mainnet): PriceRegistry 0x8d2cf4a56f754d5770985d95aa179ef4d5b9b971
 |---|---|
 | GitHub repo | https://github.com/Alejdro83/stockgap-agent |
 | Deployed demo | <https://http--stockgap-app--6h2d2gps9lkr.code.run/> (live) |
-| Video | `VIDEO_URL` (placeholder — swap after upload) |
+| Video | <https://youtu.be/vQEqXFPtVyE> |
 | Demo / written walkthrough | Judge-runnable quickstart in the root [README.md](../README.md) (~10 min) + deep-dive [StockGap/README.md](../StockGap/README.md) |
 
 ## 3. ASK-OPERATOR rows
@@ -96,7 +96,7 @@ Contract (BSC mainnet): PriceRegistry 0x8d2cf4a56f754d5770985d95aa179ef4d5b9b971
 | A3 | Tagline pick | Confirm Option A (198 chars, already in root README) or switch to B/C — see morning review pack | ❓ decision (D2) |
 | A4 | Track confirm | Wording aligned to the real single track **Tokenized Stocks Products & Agents** (official event page, verified 2026-10-07 — "Infrastructure & Tooling"/"Set & Earn" were an older form's options); final confirm against the real form's options = A9 | ❓ decision (D1, gated on A9) |
 | A5 | Public-flip go/no-go | Flip repo public only after deploy URL lands and README placeholders (`DEPLOYED_URL`, `VIDEO_URL`) are replaced | ❓ decision (D4) |
-| A7 | Video host | Where to upload the recording (YouTube?) so `VIDEO_URL` can be filled | ❓ BLOCKING |
+| A7 | Video host | YouTube (unlisted) | ✅ RESOLVED: <https://youtu.be/vQEqXFPtVyE> |
 | A8 | Oracle on-chain writer | ✅ RESOLVED (2026-10-03): real BSC **mainnet** publish — `PriceRegistry` [`0x8d2cf4a56f754d5770985d95aa179ef4d5b9b971`](https://bscscan.com/address/0x8d2cf4a56f754d5770985d95aa179ef4d5b9b971), deploy tx [`0x2235be2b…afa1`](https://bscscan.com/tx/0x2235be2b3c516f89f4bdb84f199fb774182c424f024a10d1a35569536948afa1) (block 125562365), publish tx [`0x8055d62e…7cec`](https://bscscan.com/tx/0x8055d62e8667e5564e3ad448a0a5f769285a918ee7f1b05b3ec436ac1dc97cec) (block 125562760, event `OraclePublish`); writer behind `ORACLE_PUBLISH=0\|1` toggle (default 0). ERC-8004 registry id still `REGISTRY_PLACEHOLDER` | ✅ RESOLVED |
 
 ## 4. Char-count summary (machine-verified)

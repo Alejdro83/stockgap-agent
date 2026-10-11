@@ -7,8 +7,8 @@
 | Northflank deploy healthy (`DEPLOYED_URL`) | ⏳ overnight | https://http--stockgap-app--6h2d2gps9lkr.code.run/ (verified 200, 2026-10-08) |
 | Smoke-test deployed: `GET /` = 200 + `POST /mcp tools/list` works there | ⏳ | done at: `____:____` |
 | Swap `DEPLOYED_URL` placeholder in root README + SUBMISSION_CHECKLIST links block | ⏳ | commit: `__________` |
-| Record video (script: docs/VIDEO_SCRIPT.md) + upload → `VIDEO_URL` | ⏳ | URL: `______________` |
-| Swap `VIDEO_URL` placeholder in root README + checklist | ⏳ | |
+| Record video (script: docs/VIDEO_SCRIPT.md) + upload → `VIDEO_URL` | ✅ | URL: <https://youtu.be/vQEqXFPtVyE> |
+| Swap `VIDEO_URL` placeholder in root README + checklist | ✅ | commit done |
 | Final `python3 -m pytest -q` = 416 passed, 2 skipped | ✅ | @ d6de0a5 (2026-10-08, venv limpio + eth-account) |
 
 ## 2. ASK-OPERATOR (blocking — forms cannot be filled without these)
