@@ -91,7 +91,7 @@ Contract (BSC mainnet): PriceRegistry 0x8d2cf4a56f754d5770985d95aa179ef4d5b9b971
 
 | # | Field | Question for operator | Status |
 |---|-------|----------------------|--------|
-| A1 | Team members | Real name, role, contact (email/handle) per team member — for the team fields in both forms | ❓ BLOCKING |
+| A1 | Team members | Solo builder: José Alejandro González García (github.com/Alejdro83) | ✅ RESOLVED |
 | A2 | BNB wallet (HEX) | Wallet address in HEX (0x…) for the wallet field / potential prize payout | ✅ RESUELTO 2026-10-07: 0xb471f1aB267144CF4CFff4800beA3ebC0E08ae64 |
 | A3 | Tagline pick | Confirm Option A (198 chars, already in root README) or switch to B/C — see morning review pack | ❓ decision (D2) |
 | A4 | Track confirm | Wording aligned to the real single track **Tokenized Stocks Products & Agents** (official event page, verified 2026-10-07 — "Infrastructure & Tooling"/"Set & Earn" were an older form's options); final confirm against the real form's options = A9 | ❓ decision (D1, gated on A9) |
