@@ -1,0 +1,136 @@
+{
+  "probed_at": "2026-10-11T08:15:40Z",
+  "endpoint": "POST /build/api/v2/b402/supported",
+  "request_body": {
+    "body": {}
+  },
+  "http_status": 200,
+  "code": "000000000",
+  "kinds_count": 10,
+  "kinds": [
+    {
+      "x402Version": 2,
+      "scheme": "exact",
+      "network": "eip155:56",
+      "extra": {
+        "name": "United Stables",
+        "version": "1",
+        "assetTransferMethod": "eip3009",
+        "signerAddress": "0x34F7a661160780Ce1346e6D7B96D2bE244590899"
+      }
+    },
+    {
+      "x402Version": 2,
+      "scheme": "exact",
+      "network": "eip155:56",
+      "extra": {
+        "name": "United Stables",
+        "version": "1",
+        "assetTransferMethod": "permit2-exact",
+        "signerAddress": "0x34F7a661160780Ce1346e6D7B96D2bE244590899",
+        "spenderAddress": "0x3038f7ac3b4D1a3fe886BdCB5cD01e9f6BDd8633"
+      }
+    },
+    {
+      "x402Version": 2,
+      "scheme": "upto",
+      "network": "eip155:56",
+      "extra": {
+        "name": "United Stables",
+        "version": "1",
+        "assetTransferMethod": "permit2-upto",
+        "signerAddress": "0x34F7a661160780Ce1346e6D7B96D2bE244590899",
+        "spenderAddress": "0x8c819E6De3df83E0e87bBE7651c5D4e83229b239"
+      }
+    },
+    {
+      "x402Version": 2,
+      "scheme": "exact",
+      "network": "eip155:56",
+      "extra": {
+        "name": "World Liberty Financial USD",
+        "version": "1",
+        "assetTransferMethod": "eip3009",
+        "signerAddress": "0x34F7a661160780Ce1346e6D7B96D2bE244590899"
+      }
+    },
+    {
+      "x402Version": 2,
+      "scheme": "exact",
+      "network": "eip155:56",
+      "extra": {
+        "name": "World Liberty Financial USD",
+        "version": "1",
+        "assetTransferMethod": "permit2-exact",
+        "signerAddress": "0x34F7a661160780Ce1346e6D7B96D2bE244590899",
+        "spenderAddress": "0x3038f7ac3b4D1a3fe886BdCB5cD01e9f6BDd8633"
+      }
+    },
+    {
+      "x402Version": 2,
+      "scheme": "upto",
+      "network": "eip155:56",
+      "extra": {
+        "name": "World Liberty Financial USD",
+        "version": "1",
+        "assetTransferMethod": "permit2-upto",
+        "signerAddress": "0x34F7a661160780Ce1346e6D7B96D2bE244590899",
+        "spenderAddress": "0x8c819E6De3df83E0e87bBE7651c5D4e83229b239"
+      }
+    },
+    {
+      "x402Version": 2,
+      "scheme": "exact",
+      "network": "eip155:56",
+      "extra": {
+        "name": "Tether USD",
+        "version": "1",
+        "assetTransferMethod": "permit2-exact",
+        "signerAddress": "0x34F7a661160780Ce1346e6D7B96D2bE244590899",
+        "spenderAddress": "0x3038f7ac3b4D1a3fe886BdCB5cD01e9f6BDd8633"
+      }
+    },
+    {
+      "x402Version": 2,
+      "scheme": "upto",
+      "network": "eip155:56",
+      "extra": {
+        "name": "Tether USD",
+        "version": "1",
+        "assetTransferMethod": "permit2-upto",
+        "signerAddress": "0x34F7a661160780Ce1346e6D7B96D2bE244590899",
+        "spenderAddress": "0x8c819E6De3df83E0e87bBE7651c5D4e83229b239"
+      }
+    },
+    {
+      "x402Version": 2,
+      "scheme": "exact",
+      "network": "eip155:56",
+      "extra": {
+        "name": "USD Coin",
+        "version": "1",
+        "assetTransferMethod": "permit2-exact",
+        "signerAddress": "0x34F7a661160780Ce1346e6D7B96D2bE244590899",
+        "spenderAddress": "0x3038f7ac3b4D1a3fe886BdCB5cD01e9f6BDd8633"
+      }
+    },
+    {
+      "x402Version": 2,
+      "scheme": "upto",
+      "network": "eip155:56",
+      "extra": {
+        "name": "USD Coin",
+        "version": "1",
+        "assetTransferMethod": "permit2-upto",
+        "signerAddress": "0x34F7a661160780Ce1346e6D7B96D2bE244590899",
+        "spenderAddress": "0x8c819E6De3df83E0e87bBE7651c5D4e83229b239"
+      }
+    }
+  ],
+  "signers": {
+    "eip155:*": [
+      "0x34F7a661160780Ce1346e6D7B96D2bE244590899"
+    ]
+  },
+  "extensions": []
+}

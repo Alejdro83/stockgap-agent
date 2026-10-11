@@ -377,3 +377,19 @@ Reinicio (una línea):
 - **What shipped (fix round `01528aa`, then this docs commit):** B1 — `docs/task-2-hybrid-runbook.md` STEP 2 now explicitly SETS `STOCKGAP_MODE=dashboard` before deploy (names the Dockerfile-default-full danger) + STEP 3 log-line verification with STOP-and-fix; B2 (N7 regression) — `stockgap/dashboard.py` ingest import + router mount wrapped in try/except: loud `ingest router UNAVAILABLE` log naming the failure, dashboard keeps serving; boot tests cover import-failure AND mount-failure; contract tightenings in `stockgap/ingest.py` (mode/table-class mismatch → 422 pre-DB in both directions — snapshot can never reach an append table's upsert path, append can never freeze a snapshot table's healing; explicit non-NULL primary key required in both modes → 422 with a fixed body naming the primary key); `scripts/deploy/entrypoint.sh` comment now matches the code exactly (unset = full; ANY non-`full` value = dashboard, fails safe); shipper hardening — `scripts/ship_rows.py` treats 3xx redirects as FATAL `unexpected redirect` (Authorization can never leak to a redirected host; tests pin no-follow, fatal exit, no retry, GET and POST) and `config/ingest.env` group/world-readable → ONE loud chmod-600 warning (path named, values never logged), non-fatal, 600 silent; runbook gains the `df -h /data` headroom check before cutover (≥ 2× local DB) + `https://`-only `STOCKGAP_INGEST_URL` rule. This commit: test-count sweep 383 → 392.
 - **Tests:** 383 → **392** (+9, per-file pytest collection: `test_deploy_preflight` 19 → 21 (+2 boot tests — import-failure, mount-failure), `test_ingest` 41 → 45 (+4 — mode/table-class mismatch both directions, NULL/absent pk both modes), `test_ship_rows` 34 → 37 (+3 — redirect-fatal pinning); 19 test modules unchanged). Full suite `python3 -m pytest -q` = **392 passed** in 125.03 s pytest-internal / 126 s wall (measured 2026-10-04) — the `~123s` measured-time claims were swept to `~125s` along. The retargeted `test_422_partial_column_set_nothing_written` (snapshot → append) still asserts exactly its name (partial column set → 422 + nothing written).
 - **Count sweep:** every current-state `383` claim across `*.md` now reads 392 (root README incl. badge, StockGap/README incl. per-module table + `19 test modules, 392 tests` + checkpoint chain `… 272 → 273 → 383 → **392**`, MORNING_REVIEW_PACK, SUBMISSION_CHECKLIST — length-preserving 383→392 / `~123s`→`~125s` so the machine-verified char counts hold — VIDEO_SCRIPT EN+ES). Prior DX-LOG entries stay verbatim (history stays history).
+
+
+## 2026-10-11 — b402 live: `supported` works after Developer Portal approval
+
+- **What changed:** the project's B402 Payments application was approved in the Developer Portal. Re-running
+  `POST /build/api/v2/b402/supported` with the documented envelope `{"body":{}}` now returns HTTP 200,
+  `code=000000000` and 10 `kinds` (x402 V2, `eip155:56`, schemes `exact` and `upto`; assets United Stables, World Liberty
+  Financial USD, Tether USD, USD Coin). Evidence: `docs/evidence/b402-supported-live.json` (script: `scripts/b402_supported_probe.py`, read-only,
+  no credentials stored).
+- **Correction to earlier DX notes:** the official docs DO describe B402 onboarding (Developer Portal: complete the
+  B402 Payments application, then create an API key with the B402 Payments permission) — an earlier DX answer saying no
+  page describes it was wrong. The earlier `100001008` was the pre-approval state of the project.
+- **Still unexercised:** `verify` and `settle` (need a buyer-signed Permit2 payload and stablecoin funds; `settle` moves
+  money). The `binance` adapter in `stockgap/b402_gate.py` still assumes x402 v1 shapes; Binance's API is x402 V2.
+- **Credential hygiene:** a first attempt to store a new API key picked up 45 stray characters from the terminal paste;
+  the file was rewritten with the valid 39 characters (verified by a 200 from `supported`).
