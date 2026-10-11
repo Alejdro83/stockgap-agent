@@ -12,6 +12,7 @@ Prepared for **BNB Hack: Tokenized Stocks Edition** (submissions lock 2026-10-11
 - **Repo:** https://github.com/Alejdro83/stockgap-agent (public at submission time)
 - **Deployed demo:** <https://http--stockgap-app--6h2d2gps9lkr.code.run/> (Northflank, live; `POST /mcp` `tools/list` is free) — judge-runnable instructions below
 - **Video pitch (≤4 min):** <https://youtu.be/vQEqXFPtVyE> (script in [docs/VIDEO_SCRIPT.md](./docs/VIDEO_SCRIPT.md))
+- **Judge quickstart (90 s):** [docs/JUDGE_QUICKSTART.md](./docs/JUDGE_QUICKSTART.md) — live demo, pay gate, on-chain proofs and honest limits in one page
 - **Written demo (judge-runnable, ~10 min):** the [Quickstart](#quickstart-judge-runnable) below runs everything locally; full run notes in [StockGap/README.md](./StockGap/README.md)
 - **Deep-dive README (architecture, verified API details, evidence):** [StockGap/README.md](./StockGap/README.md)
 
