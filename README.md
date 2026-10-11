@@ -1,11 +1,15 @@
 # StockGap
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-416%20passing-brightgreen)](./tests)
+[![Tests](https://img.shields.io/badge/tests-417%20passing-brightgreen)](./tests)
 [![Python](https://img.shields.io/badge/python-3.x-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![BNB Chain](https://img.shields.io/badge/BNB%20Chain-BSC%2056-F0B90B)](https://www.bnbchain.org/)
 
 > **StockGap measures the gap between tokenized-stock prices and their independent reference close — 488 RWA tokens / 30s — and sells signals to agents over a pay-per-call (x402) MCP layer on BNB Chain.**
+
+<p align="center"><img src="./docs/assets/dashboard-gaps.png" alt="StockGap live dashboard, Gaps tab, mobile view" width="380"></p>
+
+<p align="center"><sub>Live dashboard (mobile view): tokens ranked by <code>spread_bps_real</code>, each card showing the per-share price and the independent close the spread is computed from.</sub></p>
 
 Prepared for **BNB Hack: Tokenized Stocks Edition** (submissions lock 2026-10-11 12:00 UTC).
 
@@ -30,7 +34,7 @@ Prepared for **BNB Hack: Tokenized Stocks Edition** (submissions lock 2026-10-11
 ```bash
 git clone https://github.com/Alejdro83/stockgap-agent && cd stockgap-agent
 python3 -m pip install -r requirements.txt eth-account   # eth-account: needed by the on-chain writer tests
-python3 -m pytest -q          # 416 passed, 2 skipped (~2 min wall, measured 2026-10-08 @ d6de0a5)
+python3 -m pytest -q          # 417 passed, 2 skipped (~2 min wall, measured 2026-10-11 @ a4ff96a)
 mkdir -p data                 # data/ is gitignored
 
 # terminal 1: live collector — 30s ticks of 488 RWA tokens (rows land after the first tick)
@@ -72,7 +76,7 @@ StockGap is the independent price-gap data layer that tokenized-stock issuers an
 | \|spread\| p25 / p50 / p75 | 4.7 / 12.3 / 29.0 bps (abs > 0.5 filter, n ≈ 4.76M) |
 | Per 30s tick | 488 RWA + 40 cross-issuer pairs |
 | Oracle coverage | 442 underlyings with an independent close |
-| Tests | 416 passed, 2 skipped (`pytest -q` @ `d6de0a5`) |
+| Tests | 417 passed, 2 skipped (`pytest -q` @ `a4ff96a`) |
 
 Honest limits: three early demo-trade broadcasts reverted on-chain (2-second in-calldata route deadline — root-caused via `eth_call` replay + calldata decode, [RECOVERY.md](./RECOVERY.md) documents them unchanged). The pipeline now ships a **pre-broadcast deadline gate**, and tx [`0xd8ef9e75…a48f`](https://bscscan.com/tx/0xd8ef9e75467ddb27ab97076e3b112fbe4a552488b81dddd09a81bb4cd490a48f) is the **first successful live trade** through the hardened pipeline (1 wei BNB→NVDAB dust demo, one attempt). The oracle's on-chain writer is real on BSC mainnet ([`PriceRegistry 0x8d2cf4a5…b971`](https://bscscan.com/address/0x8d2cf4a56f754d5770985d95aa179ef4d5b9b971)) but **toggled off by default** (`ORACLE_PUBLISH=0` = mock DB ledger). b402: `local_receipt` verification works live against BSC RPC (wrong-recipient receipts correctly rejected), and Binance's own b402 rail is only partly exercised: after the project's B402 Payments application was approved in the Developer Portal (2026-10-11), `POST /api/v2/b402/supported` answers live (HTTP 200, `code=000000000`, 10 kinds — [`docs/evidence/b402-supported-live.json`](./docs/evidence/b402-supported-live.json)); earlier probes, before approval, returned `code=100001008` ("business entity empty"). `verify` and `settle` remain unexercised, and the `binance` adapter still targets x402 v1 shapes while Binance's API is x402 V2 (`{"body":…}` envelope, Permit2, stablecoins), so a V2 port is still needed. The ERC-8004 registry id is still a placeholder.
 

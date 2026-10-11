@@ -55,7 +55,7 @@ RWA Data API (`rwa/tokens`, `rwa/price`, `rwa/underlying-market` — the core da
 
 - 12.1M `spread_ticks` rows; 488 RWA tokens (442 Ondo + 46 BStock) + 40 cross-issuer pairs per 30 s tick.
 - `|spread_bps_real|` p25 / p50 / p75 = **4.7 / 12.3 / 29.0 bps** (filter |spread| > 0.5 bps, n ≈ 4.76M), measured against an independent per-share close, not the derived same-endpoint pair (which is structurally ~0).
-- Tests: `pip install -r requirements.txt eth-account && python3 -m pytest -q` → **416 passed, 2 skipped** (~2 min).
+- Tests: `pip install -r requirements.txt eth-account && python3 -m pytest -q` → **417 passed, 2 skipped** (~2 min).
 
 ## 6. Honest limits (read these before scoring)
 
